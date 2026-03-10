@@ -2380,17 +2380,7 @@ function LoginScreen({ onLogin, error }) {
             <Btn onClick={()=>onLogin(u,p)} style={{ width:"100%", padding:"12px 0", marginTop:4 }}>Accedi</Btn>
           </div>
         </div>
-        <div style={{ ...s.card, padding:"16px 20px", marginTop:16, fontSize:11 }}>
-          <div style={{ color:C.sub, marginBottom:8, fontWeight:700, textTransform:"uppercase", letterSpacing:1, fontSize:9 }}>Credenziali demo</div>
-          {[["admin","admin123","🔑 Admin (demo)"],["fiat","fiat123","👁 Fiat (demo)"],["barilla","barilla123","👁 Barilla (demo)"],["trenitalia","treni123","👁 Trenitalia (demo)"]].map(([u,p,l])=>(
-            <div key={u} onClick={()=>{setU(u);setP(p);}} style={{ display:"flex", justifyContent:"space-between", padding:"5px 8px", borderRadius:6, cursor:"pointer", marginBottom:2, transition:"background 0.1s" }}
-              onMouseEnter={e=>e.currentTarget.style.background=C.border}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <span style={{ color:C.sub }}>{l}</span>
-              <span style={{ fontFamily:"monospace", color:C.muted }}>{u} / {p}</span>
-            </div>
-          ))}
-        </div>
+
       </div>
     </div>
   );
