@@ -327,9 +327,55 @@ function normCinema(s) {
 
 // Score how well a Jan cinema matches a circuit cinema (0=no match)
 // Province match is REQUIRED when both sides have it
+// Forced aliases: { geoName, geoProv, dataName, dataProv }
+// dataProv can be "" to ignore province (use when presenze file has wrong province)
+const FORCED_ALIASES = [
+  // FILANGERI (geo) -> FILANGIERI (typo in data)
+  { geoN:"FILANGERI",               geoP:"NA", dataN:"FILANGIERI",                   dataP:"NA" },
+  // CINEPLUS COMACCHIO (geo) -> CINEPARK COMACCHIO (data)
+  { geoN:"CINEPLUS COMACCHIO",      geoP:"FE", dataN:"CINEPARK COMACCHIO",           dataP:"FE" },
+  // CINEMA TEATRO AGORÀ BS/OSPITALETTO -> data has wrong province BR
+  { geoN:"CINEMA TEATRO AGORA",     geoP:"",   dataN:"CINEMA TEATRO AGORA'",         dataP:"" },
+  // CINEMA S.AMBROGIO (MI) -> SANT'AMBROGIO
+  { geoN:"CINEMA S.AMBROGIO",       geoP:"MI", dataN:"SANT'AMBROGIO",                dataP:"MI" },
+  // CINEMA TEATRO AUDITORIO (VA, Cassano Magnago) -> AUDITORIUM
+  { geoN:"CINEMA TEATRO AUDITORIO", geoP:"VA", dataN:"AUDITORIUM",                   dataP:"VA" },
+  // MULTICINEMA TEATRO NORBA (BA) -> NORBA
+  { geoN:"MULTICINEMA TEATRO NORBA",geoP:"BA", dataN:"NORBA",                        dataP:"BA" },
+  // MULTIPLEX OMNIA CENTER (PO/Prato) -> MULTIPLEX GIOMETTI - PRATO
+  { geoN:"MULTIPLEX OMNIA CENTER",  geoP:"PO", dataN:"MULTIPLEX GIOMETTI - PRATO",   dataP:"PO" },
+  { geoN:"MULTIPLEX  OMNIA CENTER", geoP:"PO", dataN:"MULTIPLEX GIOMETTI - PRATO",   dataP:"PO" },
+  // CINEMA MATTARELLO (TN) -> SAN LEONARDO MATTARELLO (data has wrong prov TR instead of TN)
+  { geoN:"CINEMA MATTARELLO",       geoP:"",   dataN:"SAN LEONARDO MATTARELLO",       dataP:"" },
+];
+
+function aliasMatch(nameA, provA, nameB, provB) {
+  // Check both directions against forced alias table
+  const nA = nameA.toUpperCase().trim(), pA = (provA||"").toUpperCase().trim();
+  const nB = nameB.toUpperCase().trim(), pB = (provB||"").toUpperCase().trim();
+  for (const al of FORCED_ALIASES) {
+    const gN = al.geoN.toUpperCase(), gP = al.geoP.toUpperCase();
+    const dN = al.dataN.toUpperCase(), dP = al.dataP.toUpperCase();
+    const provOkG = !gP || !pA || pA === gP;
+    const provOkD = !dP || !pB || pB === dP;
+    if ((nA === gN || normCinema(nA) === normCinema(gN)) && provOkG &&
+        (nB === dN || normCinema(nB) === normCinema(dN)) && provOkD) return true;
+    // reversed
+    const provOkG2 = !gP || !pB || pB === gP;
+    const provOkD2 = !dP || !pA || pA === dP;
+    if ((nB === gN || normCinema(nB) === normCinema(gN)) && provOkG2 &&
+        (nA === dN || normCinema(nA) === normCinema(dN)) && provOkD2) return true;
+  }
+  return false;
+}
+
 function matchScore(jName, jProv, cName, cProv) {
   const jN = jName.toUpperCase().trim(), cN = cName.toUpperCase().trim();
   const jP = (jProv||"").toUpperCase().trim(), cP = (cProv||"").toUpperCase().trim();
+
+  // Check forced aliases first (score 5 = highest priority)
+  if (aliasMatch(jN, jP, cN, cP)) return 5;
+
   if (jP && cP && jP !== cP) return 0;
   const normJ = normCinema(jN), normC = normCinema(cN);
   if (cN === jN) return 4;
@@ -957,7 +1003,7 @@ function UserModal({ initial, clients, onSave, onClose }) {
         </div>
         <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
           <div style={s.field}><label style={s.label}>Nome completo</label><input style={s.input} value={form.name} onChange={e=>set("name",e.target.value)} placeholder="Mario Rossi" /></div>
-          <div style={s.field}><label style={s.label}>Username (login)</label><input style={s.input} value={form.username} onChange={e=>set("username",e.target.value)} placeholder="mario.rossi" /></div>
+          <div style={s.field}><label style={s.label}>Email (login)</label><input style={s.input} value={form.username} onChange={e=>set("username",e.target.value)} placeholder="mario.rossi@azienda.it" type="email" /></div>
           <div style={s.field}><label style={s.label}>Password</label><input style={s.input} type="password" value={form.password} onChange={e=>set("password",e.target.value)} placeholder={initial?"lascia vuoto per non cambiare":""} /></div>
           <div style={s.field}>
             <label style={s.label}>Ruolo</label>
@@ -1015,7 +1061,7 @@ function UsersScreen({ users, clients, campaigns, currentUser, onAdd, onEdit, on
         <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
           <thead>
             <tr style={{ borderBottom:`1px solid ${C.border}` }}>
-              {["Utente","Username","Ruolo","Cliente","Campagne visibili","Azioni"].map(h=>(
+              {["Utente","Email","Ruolo","Cliente","Campagne visibili","Azioni"].map(h=>(
                 <th key={h} style={{ padding:"12px 16px", textAlign:"left", color:C.sub, fontWeight:600, fontSize:10, letterSpacing:1, textTransform:"uppercase" }}>{h}</th>
               ))}
             </tr>
@@ -1125,8 +1171,8 @@ function ClientForm({ onSave, onClose }) {
               </div>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <div style={s.field}>
-                  <label style={s.label}>Username</label>
-                  <input style={s.input} value={creds.username} onChange={e=>setCred("username",e.target.value)} placeholder="es. fiat.referente" />
+                  <label style={s.label}>Email</label>
+                  <input style={s.input} value={creds.username} onChange={e=>setCred("username",e.target.value)} placeholder="es. referente@fiat.com" type="email" />
                 </div>
                 <div style={s.field}>
                   <label style={s.label}>Password</label>
@@ -2323,7 +2369,7 @@ function LoginScreen({ onLogin, error }) {
         </div>
         <div style={{ ...s.card, padding:32 }}>
           <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <div style={s.field}><label style={s.label}>Username</label><input style={{ ...s.input, fontSize:14 }} value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin(u,p)} placeholder="username" autoFocus /></div>
+            <div style={s.field}><label style={s.label}>Email</label><input style={{ ...s.input, fontSize:14 }} value={u} onChange={e=>setU(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin(u,p)} placeholder="email@azienda.it" autoFocus type="email" /></div>
             <div style={s.field}><label style={s.label}>Password</label>
               <div style={{ position:"relative" }}>
                 <input type={show?"text":"password"} style={{ ...s.input, fontSize:14, paddingRight:40 }} value={p} onChange={e=>setP(e.target.value)} onKeyDown={e=>e.key==="Enter"&&onLogin(u,p)} placeholder="password" />
@@ -2334,17 +2380,7 @@ function LoginScreen({ onLogin, error }) {
             <Btn onClick={()=>onLogin(u,p)} style={{ width:"100%", padding:"12px 0", marginTop:4 }}>Accedi</Btn>
           </div>
         </div>
-        <div style={{ ...s.card, padding:"16px 20px", marginTop:16, fontSize:11 }}>
-          <div style={{ color:C.sub, marginBottom:8, fontWeight:700, textTransform:"uppercase", letterSpacing:1, fontSize:9 }}>Credenziali demo</div>
-          {[["admin","admin123","🔑 Admin"],["fiat","fiat123","👁 Fiat"],["barilla","barilla123","👁 Barilla"],["trenitalia","treni123","👁 Trenitalia"]].map(([u,p,l])=>(
-            <div key={u} onClick={()=>{setU(u);setP(p);}} style={{ display:"flex", justifyContent:"space-between", padding:"5px 8px", borderRadius:6, cursor:"pointer", marginBottom:2, transition:"background 0.1s" }}
-              onMouseEnter={e=>e.currentTarget.style.background=C.border}
-              onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
-              <span style={{ color:C.sub }}>{l}</span>
-              <span style={{ fontFamily:"monospace", color:C.muted }}>{u} / {p}</span>
-            </div>
-          ))}
-        </div>
+
       </div>
     </div>
   );
