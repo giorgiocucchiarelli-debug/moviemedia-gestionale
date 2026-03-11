@@ -2512,9 +2512,20 @@ ${ _bestProf ? `
   );
 }
 function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, onSelect, onNew, onEdit, onBack }) {
-  const totalI = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); return a+(r.presenze||c.impressions||0); },0);
-  const totalSpots = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+eff; },0);
-  const totalCO2 = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+(c.co2Saved||calcCO2(c.tipo||c.type,eff,c.spotSec||30)); },0);
+  // Single pass: compute all aggregates together to avoid triple-calling computeCampaignAdmissions
+  let totalI = 0, totalSpots = 0, totalCO2 = 0;
+  const campResults = campaigns.map(c => {
+    try {
+      const r   = computeCampaignAdmissions(c, circuitData, circuitDef);
+      const adm = (typeof r.presenze === "number" ? r.presenze : 0) || (Number(c.impressions) || 0);
+      const eff = (Number(c.spots) || 0) > 0 ? Number(c.spots) : (typeof r.spettacoli === "number" ? r.spettacoli : 0);
+      const co2 = Number(c.co2Saved) || calcCO2(c.tipo || c.type, eff, Number(c.spotSec) || 30);
+      totalI     += adm;
+      totalSpots += eff;
+      totalCO2   += (isFinite(co2) ? co2 : 0);
+      return { adm, eff, co2 };
+    } catch(e) { return { adm:0, eff:0, co2:0 }; }
+  });
   const active = campaigns.filter(c=>c.status==="active").length;
   return (
     <div style={{ paddingBottom:60 }}>
@@ -2540,20 +2551,23 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
         {campaigns.length===0
           ? <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}><div style={{ fontSize:40, marginBottom:12 }}>🎬</div><p>Nessuna campagna ancora</p></div>
           : <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {campaigns.map(c=>{
-                const cd=circuitData[c.period]||Object.values(circuitData)[0];
-                const campR = computeCampaignAdmissions(c, circuitData, circuitDef);
-                const displayAdm = campR.presenze || c.impressions || 0;
+              {campaigns.map((c, idx)=>{
+                const cd = circuitData[c.period] || Object.values(circuitData)[0];
+                const { adm: displayAdm } = campResults[idx] || { adm: 0 };
+                const name    = String(c.name    || "—");
+                const agenzia = c.agenzia ? String(c.agenzia) : null;
+                const period  = String(cd?.label || c.period || "—");
+                const film    = String(c.film    || "");
                 return (
-                  <div key={c.id} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
+                  <div key={c.id || idx} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.background="#1C2430";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface;}}
                     onClick={()=>onSelect(c)}>
                     <div style={{ width:40, height:40, borderRadius:10, background:c.type==="circuit"?`${C.gold}18`:`${C.blue}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{c.type==="circuit"?"🎭":"🎬"}</div>
                     <div>
-                      <div style={{ fontWeight:700, color:C.text, marginBottom:3 }}>{c.name}</div>
-                      <div style={{ fontSize:11, color:C.sub }}>{c.type==="circuit"?"Intero circuito":`Film: ${c.film}`} · {cd?.label||c.period} · {c.dateFrom} → {c.dateTo}</div>
-                      {c.agenzia && <div style={{ fontSize:10, color:C.blue, marginTop:2 }}>🏢 {c.agenzia}</div>}
+                      <div style={{ fontWeight:700, color:C.text, marginBottom:3 }}>{name}</div>
+                      <div style={{ fontSize:11, color:C.sub }}>{c.type==="circuit"?"Intero circuito":`Film: ${film}`} · {period} · {String(c.dateFrom||"")} → {String(c.dateTo||"")}</div>
+                      {agenzia && <div style={{ fontSize:10, color:C.blue, marginTop:2 }}>🏢 {agenzia}</div>}
                     </div>
                     <div style={{ textAlign:"right" }}>
                       <div style={{ fontSize:15, fontWeight:800, color:C.gold }}>{displayAdm > 0 ? fmt(displayAdm) : "—"}</div>
