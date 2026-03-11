@@ -147,14 +147,20 @@ function parseMoviemediaXlsx(file, onDone, onError) {
       const rowsStr = XLSX.utils.sheet_to_json(ws, { header:1, defval:null, raw:false });
 
       let headerIdx = -1;
-      for (let i = 0; i < Math.min(rowsRaw.length, 5); i++) {
+      for (let i = 0; i < Math.min(rowsRaw.length, 15); i++) {
         const r = rowsRaw[i];
-        if (r && r.some(c => String(c||"").toLowerCase() === "film") &&
-                  r.some(c => String(c||"").toLowerCase() === "presenze")) {
+        if (!r) continue;
+        const cells = r.map(c => String(c||"").toLowerCase().trim());
+        // Accept if row contains "film" AND ("presenze" OR "admissions")
+        if (cells.includes("film") && (cells.includes("presenze") || cells.includes("admissions") || cells.includes("biglietti"))) {
+          headerIdx = i; break;
+        }
+        // Fallback: "cinema" + "presenze" is enough
+        if (cells.includes("cinema") && cells.includes("presenze")) {
           headerIdx = i; break;
         }
       }
-      if (headerIdx === -1) throw new Error("Intestazione non riconosciuta.");
+      if (headerIdx === -1) throw new Error(`Intestazione non riconosciuta. Assicurarsi che il file contenga le colonne "film" e "presenze" (trovate ${rowsRaw.slice(0,5).map(r=>(r||[]).filter(Boolean).join(",")).join(" | ")}).`);
 
       const hdr     = rowsRaw[headerIdx].map(c => String(c||"").toLowerCase().trim());
       const col     = (name) => hdr.indexOf(name);
@@ -963,9 +969,9 @@ function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCir
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:16 }}>
           <div style={{ width:28, height:28, borderRadius:"50%", background:`${C.blue}22`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:14, border:`1px solid ${C.blue}44`, flexShrink:0 }}>2</div>
           <div>
-            <div style={{ fontWeight:700, color:C.bright, fontSize:14 }}>Dati Mensili / Settimanali</div>
+            <div style={{ fontWeight:700, color:C.bright, fontSize:14 }}>Dati Presenze / Incassi</div>
             <div style={{ fontSize:11, color:C.sub, marginTop:1 }}>
-              File raw con dati per spettacolo (es. <code style={{ background:C.border, borderRadius:4, padding:"1px 5px", fontSize:10 }}>March_1_8.xlsx</code>).
+              File raw con dati per spettacolo (es. <code style={{ background:C.border, borderRadius:4, padding:"1px 5px", fontSize:10 }}>Feb_1_28.xlsx</code>).
               {circuitDef ? <span style={{ color:C.green }}> · I dati verranno filtrati automaticamente sui <strong>{circuitDef.cinemas.length} cinema del circuito</strong>.</span>
                           : <span style={{ color:C.gold }}> · Carica prima la definizione circuito per filtrare i dati.</span>}
             </div>
@@ -1080,7 +1086,9 @@ function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCir
       <div style={{ ...s.card, padding:24, marginTop:8 }}>
         <SectionTitle accent={C.purple}>3 · Profilo Spettatore Cinexpert</SectionTitle>
         <p style={{ fontSize:12, color:C.sub, marginBottom:16 }}>
-          File settimanale Cinexpert con profilo demografico (sesso, età, censo). Va caricato per ogni settimana separatamente.
+          File settimanale Cinexpert con profilo demografico del pubblico (sesso, età, censo).<br/>
+          Nome file: <code style={{ background:C.border, borderRadius:4, padding:"1px 5px", fontSize:10 }}>OUTPUT_CINEXPERT_ITA_2026_-_WEEK_01_PROFILO_GENERALE.xlsx</code><br/>
+          Il numero di settimana viene letto automaticamente dal file — puoi importare ogni settimana senza sovrascrivere le precedenti.
         </p>
         <div
           onDragOver={e=>{e.preventDefault();setProfDrag(true);}}
@@ -2747,252 +2755,6 @@ function AdminNav({ active, onNav, user, onLogout }) {
 }
 
 // ─── AI ASSISTANT ─────────────────────────────────────────────────────────────
-function AiAssistant({ clients, campaigns, circuitData, circuitDef, users,
-                        onAddClient, onSaveCampaign, onUpdateCampStatus, onDeleteClient }) {
-  const [open,     setOpen]    = useState(false);
-  const [msgs,     setMsgs]    = useState([
-    { role:"assistant", content:"Ciao! Sono l'assistente Moviemedia. Posso creare clienti, campagne, aggiornare status, o spiegarti come fare modifiche al codice senza esaurire il contesto. Come posso aiutarti?" }
-  ]);
-  const [input,    setInput]   = useState("");
-  const [loading,  setLoading] = useState(false);
-  const bottomRef = useRef();
-
-  useEffect(()=>{ if(open) bottomRef.current?.scrollIntoView({ behavior:"smooth" }); }, [msgs, open]);
-
-  const stateSnapshot = () => {
-    const camps = Object.entries(campaigns).flatMap(([cid, cc]) =>
-      cc.map(c => ({ id:c.id, name:c.name, cid, clientName: clients.find(cl=>cl.id===cid)?.name||cid, status:c.status, impressions:c.impressions||0, budget:c.budget||0, dateFrom:c.dateFrom, dateTo:c.dateTo, tipo:c.tipo||c.type||"circuit", film:c.film||null, agenzia:c.agenzia||null, spots:c.spots||0, spotSec:c.spotSec||30, admissionTarget:c.admissionTarget||0 }))
-    );
-
-    // circuitData: include totals + top lists + top 100 cinema per period (sorted by presenze)
-    const circuitSummary = Object.fromEntries(
-      Object.entries(circuitData).map(([k, pd]) => {
-        const topCinema = pd.byCinema
-          ? Object.values(pd.byCinema)
-              .sort((a,b) => b.presenze - a.presenze)
-              .slice(0, 100)
-              .map(c => ({ name:c.name, prov:c.prov, citta:c.citta, reg:c.reg, presenze:c.presenze, incasso:c.incasso, spettacoli:c.spettacoli, topFilm: Object.entries(c.films||{}).sort((a,b)=>b[1]-a[1]).slice(0,3).map(([f,p])=>({f,p})) }))
-          : [];
-        return [k, {
-          key: pd.key, label: pd.label, updatedAt: pd.updatedAt,
-          totale: pd.totale,
-          topFilm: (pd.topFilm||[]).slice(0, 30),
-          regioni: pd.regioni||[],
-          province: (pd.province||[]).slice(0, 30),
-          topCinema,
-          totalCinemaCount: pd.byCinema ? Object.keys(pd.byCinema).length : 0,
-        }];
-      })
-    );
-
-    // circuitDef: include full cinema list (name, prov, citta, reg, sale)
-    const circuitDefSummary = circuitDef ? {
-      source: circuitDef.source,
-      loadedAt: circuitDef.loadedAt,
-      nCinemas: circuitDef.cinemas?.length||0,
-      cinemas: (circuitDef.cinemas||[]).map(c => ({ name:c.name, prov:c.prov, citta:c.citta, reg:c.reg, sale:c.sale })),
-    } : null;
-
-    return {
-      clients: clients.map(c=>({ id:c.id, name:c.name, sector:c.sector, color:c.color, nCamps:(campaigns[c.id]||[]).length })),
-      campaigns: camps,
-      circuitData: circuitSummary,
-      circuitDef: circuitDefSummary,
-      users: users.map(u=>({ id:u.id, name:u.name, role:u.role, username:u.username, clientId:u.clientId||null })),
-    };
-  };
-
-  const SYSTEM = `Sei l'assistente AI integrato nell'app gestionale Moviemedia — piattaforma per la pubblicità cinema italiana.
-
-DATI CHE RICEVI AD OGNI MESSAGGIO (in [STATO APP]):
-- clients: clienti con id, name, sector, color, nCamps
-- campaigns: tutte le campagne con id, name, cid (clientId), clientName, status, impressions, budget, dateFrom, dateTo, tipo, film, agenzia, spots, spotSec, admissionTarget
-- circuitData: per ogni periodo importato → { key, label, updatedAt, totale:{presenze,incasso,cinema,spettacoli}, topFilm:[{film,presenze}], regioni:[{regione,presenze,cinema}], province:[{prov,presenze}], topCinema:[{name,prov,citta,reg,presenze,incasso,spettacoli,topFilm}], totalCinemaCount }
-- circuitDef: { nCinemas, cinemas:[{name,prov,citta,reg,sale}] }
-- users: lista utenti
-
-COLORI disponibili: #D4A843 #4FD1C5 #63B3ED #F687B3 #68D391 #FC8181 #76E4F7 #B794F4
-
-AZIONI ESEGUIBILI — rispondi con JSON in blocco \`\`\`json\`\`\`:
-
-1. Creare cliente:
-{"action":"ADD_CLIENT","payload":{"name":"Nome","sector":"Settore","color":"#HEX"}}
-
-2. Creare campagna:
-{"action":"ADD_CAMPAIGN","payload":{"clientId":"id","name":"Nome","tipo":"circuit","status":"planned","dateFrom":"YYYY-MM-DD","dateTo":"YYYY-MM-DD","spots":10000,"spotSec":30,"impressions":0,"admissionTarget":0,"co2Saved":0,"budget":0,"agenzia":"","film":null,"regioni":[],"province":[]}}
-
-3. Aggiornare status:
-{"action":"UPDATE_STATUS","payload":{"clientId":"cid","campId":"id","status":"active|planned|closed"}}
-
-4. Eliminare cliente:
-{"action":"DELETE_CLIENT","payload":{"clientId":"id"}}
-
-ANALISI DATI: Puoi rispondere a domande dettagliate sui dati circuito — top film, presenze per regione/provincia/cinema, confronti tra periodi, market share, andamenti. Usa i dati reali presenti in [STATO APP].
-
-MODIFICHE CODICE: Se l'utente chiede cambiamenti alla UI o logica, dai istruzioni CONCISE (max 5 righe) su cosa cambiare e dove — l'utente le copierà in una chat Claude separata.
-
-Rispondi SEMPRE in italiano. Sii preciso coi numeri. Per azioni JSON metti il blocco e poi una breve conferma.`;
-
-  const parseAction = (text) => {
-    const match = text.match(/```json\s*([\s\S]*?)\s*```/);
-    if (!match) return null;
-    try { return JSON.parse(match[1]); } catch { return null; }
-  };
-
-  const executeAction = (action, setState) => {
-    if (!action) return;
-    if (action.action === "ADD_CLIENT") {
-      const cl = { id: uid(), ...action.payload };
-      onAddClient(cl);
-      return `✅ Cliente "${cl.name}" creato.`;
-    }
-    if (action.action === "ADD_CAMPAIGN") {
-      const camp = { id: uid(), type: action.payload.tipo || "circuit", ...action.payload };
-      onSaveCampaign(action.payload.clientId, camp);
-      return `✅ Campagna "${camp.name}" creata.`;
-    }
-    if (action.action === "UPDATE_STATUS") {
-      onUpdateCampStatus(action.payload.clientId, action.payload.campId, action.payload.status);
-      return `✅ Status aggiornato a "${action.payload.status}".`;
-    }
-    if (action.action === "DELETE_CLIENT") {
-      onDeleteClient(action.payload.clientId);
-      return `✅ Cliente eliminato.`;
-    }
-    return null;
-  };
-
-  const send = async () => {
-    if (!input.trim() || loading) return;
-    const userMsg = { role:"user", content: input.trim() };
-    const history = [...msgs, userMsg];
-    setMsgs(history);
-    setInput("");
-    setLoading(true);
-
-    // Keep only last 6 messages to avoid payload overflow
-    const recentHistory = history.slice(-6);
-    const snap = stateSnapshot();
-    const contextNote = "\n\n[STATO APP]\n" + JSON.stringify(snap);
-
-    const apiMessages = recentHistory.map((m, i) => ({
-      role: m.role,
-      content: i === recentHistory.length - 1 ? m.content + contextNote : m.content
-    }));
-
-    try {
-      const res = await fetch("https://api.anthropic.com/v1/messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1000,
-          system: SYSTEM,
-          messages: apiMessages,
-        })
-      });
-      const data = await res.json();
-      if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
-      const text = data.content?.map(b => b.text||"").join("") || "Risposta vuota.";
-
-      const action = parseAction(text);
-      const actionResult = action ? executeAction(action) : null;
-
-      const cleaned = text.replace(/```json[\s\S]*?```/g, "").trim();
-      const display = [cleaned, actionResult].filter(Boolean).join("\n");
-      setMsgs(prev => [...prev, { role:"assistant", content: display || text }]);
-    } catch(e) {
-      setMsgs(prev => [...prev, { role:"assistant", content:"❌ " + e.message }]);
-    }
-    setLoading(false);
-  };
-
-  const MsgBubble = ({ m }) => {
-    const isUser = m.role === "user";
-    return (
-      <div style={{ display:"flex", justifyContent: isUser?"flex-end":"flex-start", marginBottom:10 }}>
-        <div style={{
-          maxWidth:"85%", padding:"10px 13px", borderRadius: isUser?"14px 14px 4px 14px":"14px 14px 14px 4px",
-          background: isUser ? `linear-gradient(135deg,${C.gold},${C.goldDim})` : C.bg,
-          border: isUser ? "none" : `1px solid ${C.border}`,
-          color: isUser ? "#fff" : C.text, fontSize:12, lineHeight:1.6, whiteSpace:"pre-wrap",
-        }}>{m.content}</div>
-      </div>
-    );
-  };
-
-  return (
-    <>
-      {/* Floating button */}
-      <button onClick={()=>setOpen(o=>!o)} style={{
-        position:"fixed", bottom:28, right:28, width:54, height:54, borderRadius:"50%",
-        background:`linear-gradient(135deg,${C.gold},${C.goldDim})`, border:"none", cursor:"pointer",
-        boxShadow:"0 4px 20px rgba(0,0,0,0.4)", fontSize:24, zIndex:8888,
-        display:"flex", alignItems:"center", justifyContent:"center",
-        transition:"transform 0.2s",
-      }} title="Assistente AI">{open?"✕":"🤖"}</button>
-
-      {/* Panel */}
-      {open && (
-        <div style={{
-          position:"fixed", bottom:96, right:28, width:380, height:520,
-          background:C.surface, border:`1px solid ${C.border2}`, borderRadius:18,
-          boxShadow:"0 8px 40px rgba(0,0,0,0.5)", zIndex:8887,
-          display:"flex", flexDirection:"column", overflow:"hidden",
-        }}>
-          {/* Header */}
-          <div style={{ background:`linear-gradient(90deg,${C.bg},${C.surface})`, borderBottom:`1px solid ${C.border}`, padding:"14px 18px", display:"flex", alignItems:"center", gap:10 }}>
-            <span style={{ fontSize:18 }}>🤖</span>
-            <div>
-              <div style={{ fontSize:13, fontWeight:800, color:C.bright, fontFamily:"Georgia,serif" }}>Assistente Moviemedia</div>
-              <div style={{ fontSize:9, color:C.sub, letterSpacing:1, textTransform:"uppercase" }}>Powered by Claude · Accesso allo stato live</div>
-            </div>
-          </div>
-
-          {/* Messages */}
-          <div style={{ flex:1, overflowY:"auto", padding:"14px 16px" }}>
-            {msgs.map((m,i) => <MsgBubble key={i} m={m} />)}
-            {loading && (
-              <div style={{ display:"flex", justifyContent:"flex-start", marginBottom:10 }}>
-                <div style={{ padding:"10px 14px", borderRadius:"14px 14px 14px 4px", background:C.bg, border:`1px solid ${C.border}`, color:C.sub, fontSize:12 }}>
-                  <span style={{ animation:"pulse 1s infinite" }}>● ● ●</span>
-                </div>
-              </div>
-            )}
-            <div ref={bottomRef} />
-          </div>
-
-          {/* Suggerimenti rapidi */}
-          <div style={{ padding:"6px 12px", display:"flex", gap:6, flexWrap:"wrap", borderTop:`1px solid ${C.border}` }}>
-            {["📊 Riepilogo dati","➕ Crea cliente","🔄 Aggiorna status","💡 Modifica codice"].map(s => (
-              <button key={s} onClick={()=>setInput(s.slice(2).trim())} style={{
-                background:C.bg, border:`1px solid ${C.border}`, borderRadius:20, padding:"3px 10px",
-                fontSize:10, color:C.sub, cursor:"pointer", whiteSpace:"nowrap",
-              }}>{s}</button>
-            ))}
-          </div>
-
-          {/* Input */}
-          <div style={{ padding:"10px 14px", borderTop:`1px solid ${C.border}`, display:"flex", gap:8 }}>
-            <input
-              value={input} onChange={e=>setInput(e.target.value)}
-              onKeyDown={e=>{ if(e.key==="Enter"&&!e.shiftKey){ e.preventDefault(); send(); }}}
-              placeholder="Scrivi un comando o una domanda..."
-              style={{ ...s.input, fontSize:12, flex:1 }}
-              disabled={loading}
-            />
-            <button onClick={send} disabled={loading||!input.trim()} style={{
-              background: loading||!input.trim() ? C.border : `linear-gradient(135deg,${C.gold},${C.goldDim})`,
-              border:"none", borderRadius:8, padding:"0 14px", cursor: loading||!input.trim()?"not-allowed":"pointer",
-              color:"#fff", fontSize:16, transition:"all 0.15s",
-            }}>➤</button>
-          </div>
-        </div>
-      )}
-    </>
-  );
-}
-
 // ─── BACKUP MODAL ─────────────────────────────────────────────────────────────
 function BackupModal({ mode, json, onJsonChange, onImport, msg, onClose }) {
   const [copied, setCopied] = useState(false);
@@ -3257,30 +3019,7 @@ export default function App() {
           onClose={()=>setBackupModal(null)}
         />
       )}
-      {isSuperAdmin && (
-        <AiAssistant
-          clients={clients}
-          campaigns={campaigns}
-          circuitData={circuitData}
-          circuitDef={circuitDef}
-          users={users}
-          onAddClient={(cl) => {
-            const nextClients=[...clients,cl]; setClients(nextClients); save("mm_clients_v2",nextClients);
-            const nc={...campaigns,[cl.id]:[]}; setCampaigns(nc); save("mm_camps_v2",nc);
-          }}
-          onSaveCampaign={(clientId, camp) => {
-            const exist=campaigns[clientId]||[]; const idx=exist.findIndex(c=>c.id===camp.id);
-            const updated=idx>=0?exist.map(c=>c.id===camp.id?camp:c):[...exist,camp];
-            const nc={...campaigns,[clientId]:updated}; setCampaigns(nc); save("mm_camps_v2",nc);
-          }}
-          onUpdateCampStatus={(clientId, campId, status) => {
-            const exist=campaigns[clientId]||[];
-            const updated=exist.map(c=>c.id===campId?{...c,status}:c);
-            const nc={...campaigns,[clientId]:updated}; setCampaigns(nc); save("mm_camps_v2",nc);
-          }}
-          onDeleteClient={deleteClient}
-        />
-      )}
+
     </div>
   );
 }
