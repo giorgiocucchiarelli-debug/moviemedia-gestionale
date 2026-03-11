@@ -769,7 +769,7 @@ function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCir
     if (!file || !file.name.match(/\.xlsx?$/i)) { setProfError("Seleziona un file .xlsx valido."); return; }
     setProfError(null); setProfSaved(false); setProfParsing(true);
     parseCinexpertProfile(file,
-      (data) => { setProfParsing(false); onImportProfile(data); setProfSaved(true); },
+      (data) => { setProfParsing(false); onImportProfile(data); setProfSaved(true); setTimeout(()=>setProfSaved(false), 3000); },
       (msg)  => { setProfParsing(false); setProfError(msg); }
     );
   };
