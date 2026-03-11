@@ -1923,13 +1923,13 @@ ${cinemasSection}
 
 </div>
 <div class="disclaimer">
-  Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
+  <strong>📊 Nota Metodologica CO₂</strong> &nbsp;·&nbsp; Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
   Source: ISPRA 2024 / Lumen Research / CSRD (EU) 2022/2464 &nbsp;·&nbsp; Values require independent verification for official reporting.<br/>
   Cinema CO₂ = Spots × SpotDuration / 3600 × kWh × Grid factor &nbsp;·&nbsp; Digital CO₂ = 0.668 kg / 1,000 impressions &nbsp;·&nbsp; APM (Attention Per Mille) = secondi di attenzione attiva per 1.000 spettatori · Cinema: 25.700 sec · Digital: 5.700 sec<br/>
   <strong>Moviemedia S.r.l.</strong> &nbsp;·&nbsp; La pubblicità al cinema &nbsp;·&nbsp; moviemedia.it
 </div>
 
-<script>window.onload = function(){ window.print(); }</script>
+<script>window.onload = function(){ setTimeout(function(){ window.print(); }, 800); }</script>
 </body>
 </html>`;
 
@@ -2206,9 +2206,28 @@ ${cinemasSection}
           {/* ─── PROFILO SPETTATORE ─── */}
           {(() => {
             if (!profileData || Object.keys(profileData).length === 0) return null;
-            // Find the profile closest to campaign period
+            // Find the profile whose week overlaps the campaign period
             const profiles = Object.values(profileData).sort((a,b)=>b.key.localeCompare(a.key));
-            const prof = profiles[0]?.profile;
+            // Try to match by campaign dates: key format profile-YYYY-WNN
+            const campFrom = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
+            const campTo   = campaign.dateTo   ? new Date(campaign.dateTo)   : null;
+            let bestProfile = profiles[0];
+            if (campFrom && campTo && profiles.length > 1) {
+              // Find the profile week that falls within campaign dates
+              const matched = profiles.filter(p => {
+                const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
+                if (!wm) return false;
+                const year = parseInt(wm[1]), week = parseInt(wm[2]);
+                // Compute week start (ISO week)
+                const jan4 = new Date(year, 0, 4);
+                const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+                weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1);
+                const weekEnd = new Date(weekStart.getTime() + 6 * 86400000);
+                return weekStart <= campTo && weekEnd >= campFrom;
+              });
+              if (matched.length > 0) bestProfile = matched[0];
+            }
+            const prof = bestProfile?.profile;
             if (!prof) return null;
             const Bar = ({ label, pct, color }) => (
               <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
@@ -2222,7 +2241,7 @@ ${cinemasSection}
             return (
               <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20, background:`${C.purple}06`, border:`1px solid ${C.purple}22` }}>
                 <SectionTitle accent={C.purple}>👥 Profilo Spettatore</SectionTitle>
-                <div style={{ fontSize:10, color:C.sub, marginBottom:16 }}>Fonte: Cinexpert · {profiles[0].label}</div>
+                <div style={{ fontSize:10, color:C.sub, marginBottom:16 }}>Fonte: Cinexpert · {bestProfile?.label}</div>
                 <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20 }}>
                   {/* SESSO */}
                   <div>
