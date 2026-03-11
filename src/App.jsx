@@ -1710,7 +1710,7 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
 
     const barRow = (label, value, max, color, extra="") =>
       `<tr><td style="padding:4px 8px;font-size:10px;color:#CBD5E0;width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${label}</td>
-       <td style="padding:4px 4px"><div style="background:#E2E8F0;border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.max(4,(value/max*100)).toFixed(1)}%;height:100%;background:${color};border-radius:4px"></div></div></td>
+       <td style="padding:4px 4px"><div style="background:#1E2D3D;border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.max(4,(value/max*100)).toFixed(1)}%;height:100%;background:${color};border-radius:4px"></div></div></td>
        <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right;white-space:nowrap">${fmtFull(value)}${extra}</td></tr>`;
 
     // [label, value, highlight, color]
@@ -1875,7 +1875,7 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   .profile-bar-fill { height:100%; border-radius:4px; }
   .profile-bar-pct { width:34px; font-size:9px; font-weight:700; color:#E2E8F0; }
   .profile-sub-label { font-size:9px; font-weight:700; color:#E2E8F0; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid; padding-bottom:4px; margin-bottom:10px; margin-top:14px; }
-  @media print { body { background:white; color:#0F172A; } .section,.header { background:white; border-color:#E2E8F0; } .kpi { background:#F8FAFC; border-color:#E2E8F0; } .kpi-value { color:#B45309 !important; } .data-table tr:nth-child(odd){ background:#F8FAFC; } .data-table td { color:#64748B; } .data-table td:last-child { color:#0F172A; } .bar-table td { color:#334155; } }
+  @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
 </style>
 </head>
 <body>
@@ -1923,7 +1923,7 @@ ${geoSection}
 </div>
 
 ${ _bestProf ? `
-<hr class="page-sep"/>
+<hr class="divider"/>
 <div class="section" style="margin-bottom:14px">
   <div style="font-size:9px;font-weight:800;color:#A78BFA;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#A78BFA15;border-bottom:1px solid #A78BFA30">👥 Profilo Spettatore — Audience del Periodo</div>
   <div style="padding:18px 16px">
@@ -2501,7 +2501,8 @@ ${ _bestProf ? `
 }
 function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, onSelect, onNew, onEdit, onBack }) {
   const totalI = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); return a+(r.presenze||c.impressions||0); },0);
-  const totalCO2 = campaigns.reduce((a,c)=>a+c.co2Saved,0);
+  const totalSpots = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+eff; },0);
+  const totalCO2 = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+(c.co2Saved||calcCO2(c.tipo||c.type,eff,c.spotSec||30)); },0);
   const active = campaigns.filter(c=>c.status==="active").length;
   return (
     <div style={{ paddingBottom:60 }}>
@@ -2520,8 +2521,9 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:24 }}>
           <KpiCard icon="📋" label="Campagne"       value={campaigns.length}   accent={client.color} />
           <KpiCard icon="✅" label="Attive"          value={active}             accent={C.green} />
-          <KpiCard icon="🎟️" label="Admissions tot." value={fmt(totalI)}        accent={C.gold} sub="Somma campagne" />
-          <KpiCard icon="🌿" label="CO₂ risparmiata" value={fmtFull(totalCO2)+" kg"} accent={C.green} />
+          <KpiCard icon="🎟️" label="Admissions tot." value={fmt(totalI)}        accent={C.gold} sub="Da dati importati" />
+          <KpiCard icon="📽️" label="Spot totali"     value={fmtFull(totalSpots)} accent={C.purple} sub="Da dati importati" />
+          <KpiCard icon="🌿" label="CO₂ risparmiata" value={fmtFull(Math.round(totalCO2))+" kg"} accent={C.green} />
         </div>
         {campaigns.length===0
           ? <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}><div style={{ fontSize:40, marginBottom:12 }}>🎬</div><p>Nessuna campagna ancora</p></div>
@@ -2530,6 +2532,7 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
                 const cd=circuitData[c.period]||Object.values(circuitData)[0];
                 const campR = computeCampaignAdmissions(c, circuitData, circuitDef);
                 const displayAdm = campR.presenze || c.impressions || 0;
+                return (
                   <div key={c.id} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.background="#1C2430";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface;}}
