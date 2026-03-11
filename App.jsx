@@ -272,6 +272,79 @@ function parseMoviemediaXlsx(file, onDone, onError) {
 }
 
 
+
+// ─── CINEXPERT AUDIENCE PROFILE PARSER ───────────────────────────────────────
+function parseCinexpertProfile(file, onDone, onError) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const wb   = XLSX.read(e.target.result, { type:"array" });
+      const ws   = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header:1, defval:null });
+
+      // Row 1 has the period label, row 3 is header, rows 5+ are data
+      const periodLabel = String(rows[1]?.[0] || "").replace("Profilo globale ","").trim();
+
+      // Map row labels to clean keys
+      const KEY_MAP = {
+        "Female":          "female",
+        "Male":            "male",
+        "3-10 yo":         "age_3_10",
+        "11-14 yo":        "age_11_14",
+        "15-24 yo":        "age_15_24",
+        "25-34 yo":        "age_25_34",
+        "35-49 yo":        "age_35_49",
+        "50-59 yo":        "age_50_59",
+        "60-69 yo":        "age_60_69",
+        "70 yo and more":  "age_70plus",
+        "Status +":        "census_medium_high",
+        "Status ++":       "census_high",
+        "Status -":        "census_low",
+        "Student":         "occupation_student",
+        "Retired":         "occupation_retired",
+        "Regular":         "freq_regular",
+        "Frequent":        "freq_frequent",
+        "Casual":          "freq_casual",
+        "City up to - 30K ":  "city_small",
+        "City 30 - 100K ":    "city_medium",
+        "City 100 - 500K ":   "city_large",
+        "City 500+K ":        "city_metro",
+      };
+
+      const profile = { label: periodLabel };
+      let seenStatus = 0, seenRegular = 0;
+
+      for (const row of rows.slice(4)) {
+        if (!row || !row[0]) continue;
+        const label = String(row[0]).trim();
+        // Handle duplicates: Status has two entries (medium_high first, high second)
+        // Regular appears twice too — skip second occurrence
+        let key = KEY_MAP[label];
+        if (!key) continue;
+        if (key === "census_medium_high" && seenStatus === 1) { key = "census_high"; seenStatus++; }
+        else if (key === "census_medium_high") seenStatus++;
+        if (key === "freq_regular" && seenRegular === 1) continue;
+        else if (key === "freq_regular") seenRegular++;
+        if (profile[key] !== undefined) continue; // skip duplicates
+        const pct = typeof row[2] === "number" ? row[2] : null;
+        const abs = typeof row[1] === "number" ? Math.round(row[1]) : null;
+        if (pct !== null) profile[key] = { pct: Math.round(pct * 1000) / 10, abs };
+      }
+
+      // Derive week key from label (e.g. "week 01 - 01-07 Gennaio" -> "2026-W01")
+      const wMatch = periodLabel.match(/week\s*(\d+)/i);
+      const weekNum = wMatch ? wMatch[1].padStart(2,"0") : "00";
+      const yearMatch = periodLabel.match(/(20\d\d)/);
+      const year = yearMatch ? yearMatch[1] : new Date().getFullYear();
+      const key = `profile-${year}-W${weekNum}`;
+
+      onDone({ key, label: periodLabel, source: file.name, loadedAt: new Date().toISOString(), profile });
+    } catch(err) { onError(err.message || "Errore parsing profilo."); }
+  };
+  reader.onerror = () => onError("Errore lettura file.");
+  reader.readAsArrayBuffer(file);
+}
+
 // ─── CIRCUIT DEFINITION PARSER ───────────────────────────────────────────────
 function parseCircuitoDef(file, onDone, onError) {
   const reader = new FileReader();
@@ -611,7 +684,7 @@ function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
 
 
 // ─── IMPORT SCREEN ────────────────────────────────────────────────────────────
-function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCircuitDef }) {
+function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCircuitDef, profileData, onImportProfile }) {
   const [drag, setDrag]         = useState(false);
   const [parsing, setParsing]   = useState(false);
   const [preview, setPreview]   = useState(null);
@@ -677,6 +750,22 @@ function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCir
     };
     onCircuitDef(updated);
     setAddForm(null);
+  };
+
+  // Profile upload state
+  const [profDrag, setProfDrag]   = useState(false);
+  const [profParsing, setProfParsing] = useState(false);
+  const [profError, setProfError] = useState(null);
+  const [profSaved, setProfSaved] = useState(false);
+  const profInputRef = useRef();
+
+  const handleProfFile = (file) => {
+    if (!file || !file.name.match(/\.xlsx?$/i)) { setProfError("Seleziona un file .xlsx valido."); return; }
+    setProfError(null); setProfSaved(false); setProfParsing(true);
+    parseCinexpertProfile(file,
+      (data) => { setProfParsing(false); onImportProfile(data); setProfSaved(true); },
+      (msg)  => { setProfParsing(false); setProfError(msg); }
+    );
   };
 
   const handleDrop = (e) => { e.preventDefault(); setDrag(false); handleFile(e.dataTransfer.files[0]); };
@@ -986,6 +1075,47 @@ function ImportScreen({ circuitData, onImport, onDeletePeriod, circuitDef, onCir
           </div>
         </div>
       )}
+
+      {/* ─── PROFILO CINEXPERT UPLOAD ─── */}
+      <div style={{ ...s.card, padding:24, marginTop:8 }}>
+        <SectionTitle accent={C.purple}>3 · Profilo Spettatore Cinexpert</SectionTitle>
+        <p style={{ fontSize:12, color:C.sub, marginBottom:16 }}>
+          File settimanale Cinexpert con profilo demografico (sesso, età, censo). Va caricato per ogni settimana separatamente.
+        </p>
+        <div
+          onDragOver={e=>{e.preventDefault();setProfDrag(true);}}
+          onDragLeave={()=>setProfDrag(false)}
+          onDrop={e=>{e.preventDefault();setProfDrag(false);handleProfFile(e.dataTransfer.files[0]);}}
+          onClick={()=>profInputRef.current?.click()}
+          style={{ border:`2px dashed ${profDrag?C.purple:C.border2}`, borderRadius:12, padding:"32px 24px", textAlign:"center", cursor:"pointer", background:profDrag?`${C.purple}08`:"transparent", transition:"all 0.2s" }}>
+          <input ref={profInputRef} type="file" accept=".xlsx,.xls" style={{display:"none"}} onChange={e=>{if(e.target.files[0])handleProfFile(e.target.files[0]);e.target.value="";}} />
+          {profParsing
+            ? <><div style={{fontSize:28,marginBottom:6}}>⏳</div><p style={{color:C.sub,margin:0}}>Analisi in corso…</p></>
+            : <><div style={{fontSize:28,marginBottom:6}}>👥</div>
+                <p style={{color:C.text,fontWeight:700,margin:"0 0 2px"}}>Carica file Cinexpert Profilo</p>
+                <p style={{color:C.muted,fontSize:11,margin:0}}>es. OUTPUT_CINEXPERT_ITA_2026_WEEK_01_PROFILO_GENERALE.xlsx</p></>
+          }
+        </div>
+        {profError && <div style={{marginTop:10,color:C.red,fontSize:12}}>⚠️ {profError}</div>}
+        {profSaved && <div style={{marginTop:10,color:C.green,fontSize:12,fontWeight:700}}>✓ Profilo importato correttamente.</div>}
+        {Object.keys(profileData||{}).length > 0 && (
+          <div style={{marginTop:16}}>
+            <div style={{fontSize:10,color:C.sub,textTransform:"uppercase",letterSpacing:1,marginBottom:8}}>Profili disponibili</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {Object.values(profileData).sort((a,b)=>b.key.localeCompare(a.key)).map(pd=>(
+                <div key={pd.key} style={{display:"flex",alignItems:"center",gap:12,padding:"10px 14px",background:C.bg,borderRadius:8,border:`1px solid ${C.border}`}}>
+                  <span style={{fontSize:16}}>👥</span>
+                  <div style={{flex:1}}>
+                    <div style={{fontWeight:700,color:C.text,fontSize:12}}>{pd.label}</div>
+                    <div style={{fontSize:10,color:C.sub}}>{pd.source}</div>
+                  </div>
+                  <span style={{background:`${C.purple}18`,color:C.purple,border:`1px solid ${C.purple}44`,borderRadius:20,padding:"3px 10px",fontSize:9,fontWeight:700}}>importato</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -1452,7 +1582,7 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
 }
 
 // ─── CAMPAIGN DASHBOARD ───────────────────────────────────────────────────────
-function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, onBack, isViewer }) {
+function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, profileData, onBack, isViewer }) {
   // Find best period: match campaign dates to available imported periods
   const findBestPeriod = () => {
     const from = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
@@ -2025,6 +2155,61 @@ ${cinemasSection}
               </tbody>
             </table>
           </div>
+          {/* ─── PROFILO SPETTATORE ─── */}
+          {(() => {
+            if (!profileData || Object.keys(profileData).length === 0) return null;
+            // Find the profile closest to campaign period
+            const profiles = Object.values(profileData).sort((a,b)=>b.key.localeCompare(a.key));
+            const prof = profiles[0]?.profile;
+            if (!prof) return null;
+            const Bar = ({ label, pct, color }) => (
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <div style={{ width:90, fontSize:10, color:C.sub, textAlign:"right", flexShrink:0 }}>{label}</div>
+                <div style={{ flex:1, background:C.border, borderRadius:4, height:14, overflow:"hidden" }}>
+                  <div style={{ width:`${pct}%`, background:color||C.gold, height:"100%", borderRadius:4, transition:"width 0.5s" }} />
+                </div>
+                <div style={{ width:36, fontSize:10, fontWeight:700, color:C.text }}>{pct?.toFixed(1)}%</div>
+              </div>
+            );
+            return (
+              <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20, background:`${C.purple}06`, border:`1px solid ${C.purple}22` }}>
+                <SectionTitle accent={C.purple}>👥 Profilo Spettatore</SectionTitle>
+                <div style={{ fontSize:10, color:C.sub, marginBottom:16 }}>Fonte: Cinexpert · {profiles[0].label}</div>
+                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20 }}>
+                  {/* SESSO */}
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Sesso</div>
+                    <Bar label="Donna" pct={prof.female?.pct} color="#E879F9" />
+                    <Bar label="Uomo"  pct={prof.male?.pct}   color="#60A5FA" />
+                  </div>
+                  {/* ETÀ */}
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Fascia d'età</div>
+                    <Bar label="3-10"     pct={prof.age_3_10?.pct}   color={C.gold} />
+                    <Bar label="11-14"    pct={prof.age_11_14?.pct}  color={C.gold} />
+                    <Bar label="15-24"    pct={prof.age_15_24?.pct}  color={C.gold} />
+                    <Bar label="25-34"    pct={prof.age_25_34?.pct}  color={C.gold} />
+                    <Bar label="35-49"    pct={prof.age_35_49?.pct}  color={C.gold} />
+                    <Bar label="50-59"    pct={prof.age_50_59?.pct}  color={C.gold} />
+                    <Bar label="60-69"    pct={prof.age_60_69?.pct}  color={C.gold} />
+                    <Bar label="70+"      pct={prof.age_70plus?.pct} color={C.gold} />
+                  </div>
+                  {/* CENSO */}
+                  <div>
+                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Status socio-econ.</div>
+                    <Bar label="Alto"       pct={prof.census_high?.pct}        color={C.green} />
+                    <Bar label="Medio-alto" pct={prof.census_medium_high?.pct} color={C.green} />
+                    <Bar label="Medio-basso"pct={prof.census_low?.pct}         color={C.muted} />
+                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, margin:"14px 0 10px" }}>Frequenza</div>
+                    <Bar label="Frequente"  pct={prof.freq_frequent?.pct} color={C.blue} />
+                    <Bar label="Regular"    pct={prof.freq_regular?.pct}  color={C.blue} />
+                    <Bar label="Casual"     pct={prof.freq_casual?.pct}   color={C.muted} />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           <div style={{ ...s.card, padding:"22px 22px 18px" }}>
             <SectionTitle accent={C.blue}>Audience per Regione</SectionTitle>
             <ResponsiveContainer width="100%" height={220}>
@@ -2870,6 +3055,7 @@ export default function App() {
   const [campaigns,   setCampaigns]   = useState(DEMO_CAMPAIGNS);
   const [circuitData, setCircuitData] = useState(BUILTIN_CIRCUIT);
   const [circuitDef,  setCircuitDef]  = useState(null); // cinema list from geo file
+  const [profileData, setProfileData] = useState({}); // Cinexpert audience profiles by key
 
   const [adminTab,    setAdminTab]    = useState("clients");
   const [view,        setView]        = useState("list");
@@ -2895,6 +3081,7 @@ export default function App() {
         if (Object.keys(cleaned).length !== Object.keys(sd).length) apiSet("mm_circuit_v2", cleaned);
       }
       const sg = await apiGet("mm_circuit_def"); if(sg) setCircuitDef(sg);
+      const sp2 = await apiGet("mm_profile_v1"); if(sp2) setProfileData(sp2);
     })();
   }, []);
 
@@ -2978,6 +3165,11 @@ export default function App() {
     } catch(err) { setBackupMsg("❌ JSON non valido: " + err.message); }
   };
 
+  const handleImportProfile = (data) => {
+    const nc = { ...profileData, [data.key]: data };
+    setProfileData(nc); save("mm_profile_v1", nc);
+  };
+
   const handleImport = (data) => {
     const nc={...circuitData,[data.key]:data}; setCircuitData(nc); save("mm_circuit_v2",nc);
   };
@@ -2999,7 +3191,7 @@ export default function App() {
             <UsersScreen users={users} clients={clients} campaigns={campaigns} currentUser={currentUser} onAdd={addUser} onEdit={editUser} onDelete={deleteUser} onExportBackup={handleExportBackup} onImportBackup={handleImportBackup} />
           )}
           {adminTab==="import" && (
-            <ImportScreen circuitData={circuitData} onImport={handleImport} onDeletePeriod={handleDeletePeriod} circuitDef={circuitDef} onCircuitDef={handleCircuitDef} />
+            <ImportScreen circuitData={circuitData} onImport={handleImport} onDeletePeriod={handleDeletePeriod} circuitDef={circuitDef} onCircuitDef={handleCircuitDef} profileData={profileData} onImportProfile={handleImportProfile} />
           )}
           {adminTab==="agenzie" && (
             <AgenzieScreen clients={clients} campaigns={campaigns} circuitData={circuitData}
@@ -3020,7 +3212,7 @@ export default function App() {
                   onBack={()=>{setSelClient(null); setView("list");}} />
               )}
               {view==="dashboard" && selCamp && (
-                <CampaignDashboard campaign={selCamp} clientName={selClient?.name} circuitData={circuitData} circuitDef={circuitDef} isViewer={false} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+                <CampaignDashboard campaign={selCamp} clientName={selClient?.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={false} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
               )}
             </>
           )}
@@ -3046,7 +3238,7 @@ export default function App() {
               onNew={null} onEdit={null} onBack={null} />
           )}
           {view==="dashboard" && selCamp && (
-            <CampaignDashboard campaign={selCamp} clientName={viewerClient.name} circuitData={circuitData} circuitDef={circuitDef} isViewer={true} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+            <CampaignDashboard campaign={selCamp} clientName={viewerClient.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={true} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
           )}
         </>
       )}
