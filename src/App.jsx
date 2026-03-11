@@ -1660,11 +1660,11 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   if (!cd && !hasRealData) return <div style={{ padding:60, textAlign:"center", color:C.sub }}>Importa almeno un periodo che copra le date della campagna.</div>;
 
   const handlePrint = () => {
-    // Collect ALL profile weeks overlapping the campaign period and average them
+    // Compute best profile for this campaign period
     const _profiles = Object.values(profileData||{}).sort((a,b)=>a.key.localeCompare(b.key));
     const _campFrom = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
     const _campTo   = campaign.dateTo   ? new Date(campaign.dateTo)   : null;
-    const _matchedProfs = [];
+    let _bestProf = null, _bestProfLabel = "";
     for (const p of _profiles) {
       const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
       if (!wm) continue;
@@ -1673,24 +1673,11 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
       const ws = new Date(jan4.getTime() + (week-1)*7*86400000);
       ws.setDate(ws.getDate() - (ws.getDay()||7) + 1);
       const we = new Date(ws.getTime() + 6*86400000);
-      if (_campFrom && _campTo && ws <= _campTo && we >= _campFrom) _matchedProfs.push(p);
-    }
-    // Fallback: use first available profile
-    if (_matchedProfs.length === 0 && _profiles.length > 0) _matchedProfs.push(_profiles[0]);
-    let _bestProf = null, _bestProfLabel = "";
-    if (_matchedProfs.length === 1) {
-      _bestProf = _matchedProfs[0].profile;
-      _bestProfLabel = _matchedProfs[0].label;
-    } else if (_matchedProfs.length > 1) {
-      // Average all numeric pct fields across matched weeks
-      const keys = ["female","male","age_3_10","age_11_14","age_15_24","age_25_34","age_35_49","age_50_59","age_60_69","age_70plus","census_high","census_medium_high","census_low","freq_frequent","freq_regular","freq_casual"];
-      _bestProf = {};
-      for (const k of keys) {
-        const vals = _matchedProfs.map(p=>p.profile?.[k]?.pct).filter(v=>v!=null);
-        if (vals.length > 0) _bestProf[k] = { pct: vals.reduce((a,v)=>a+v,0)/vals.length };
+      if (_campFrom && _campTo && ws <= _campTo && we >= _campFrom) {
+        _bestProf = p.profile; _bestProfLabel = p.label; break;
       }
-      _bestProfLabel = `Media ${_matchedProfs.length} sett. (${_matchedProfs[0].label} → ${_matchedProfs[_matchedProfs.length-1].label})`;
     }
+    if (!_bestProf && _profiles.length > 0) { _bestProf = _profiles[0].profile; _bestProfLabel = _profiles[0].label; }
 
     const co2r   = campaign.co2Saved || calcCO2(campaign.tipo||campaign.type, effectiveSpots, campaign.spotSec||30);
     const digR   = calcDigCO2(realAdm);
@@ -1722,9 +1709,9 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
     const GENERE_COLORS = { DRAMMATICO:"#B45309", COMMEDIA:"#0F766E", ANIMAZIONE:"#1D4ED8", THRILLER:"#7C3AED", AZIONE:"#DC2626", DEFAULT:"#64748B" };
 
     const barRow = (label, value, max, color, extra="") =>
-      `<tr><td style="padding:4px 8px;font-size:10px;color:#334155;width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${label}</td>
+      `<tr><td style="padding:4px 8px;font-size:10px;color:#CBD5E0;width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px">${label}</td>
        <td style="padding:4px 4px"><div style="background:#E2E8F0;border-radius:4px;height:14px;overflow:hidden"><div style="width:${Math.max(4,(value/max*100)).toFixed(1)}%;height:100%;background:${color};border-radius:4px"></div></div></td>
-       <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#0F172A;text-align:right;white-space:nowrap">${fmtFull(value)}${extra}</td></tr>`;
+       <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right;white-space:nowrap">${fmtFull(value)}${extra}</td></tr>`;
 
     // [label, value, highlight, color]
     const co2Rows = [
@@ -1765,23 +1752,23 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
     const filmsSection = `<div class="section" style="margin-bottom:14px">
       ${secTitle("🎬", isCircuit ? "Top 10 Film nel Circuito — Share sulla Pianificazione" : "Film della Campagna", "#1D4ED8", "#EFF6FF", "#BFDBFE")}
       ${tableWrap(`
-        <tr style="background:#F1F5F9"><th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">#</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">Film</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;border-bottom:1px solid #E2E8F0">Genere</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:right;border-bottom:1px solid #E2E8F0">Presenze</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:right;border-bottom:1px solid #E2E8F0">% Share</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0;width:140px">Bar</th></tr>
+        <tr style="background:#0A1628"><th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">#</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">Film</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;border-bottom:1px solid #1E2D3D">Genere</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:right;border-bottom:1px solid #1E2D3D">Presenze</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:right;border-bottom:1px solid #1E2D3D">% Share</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D;width:140px">Bar</th></tr>
         ${topFilms.map((f,i)=>{
           const gc = GENERE_COLORS[f.genere]||GENERE_COLORS.DEFAULT;
           const share = ((f.presenze/totalAdm)*100).toFixed(1);
           const barW  = Math.max(3,(f.presenze/maxFilm*100)).toFixed(1);
-          return `<tr style="background:${i%2===0?"#FFFFFF":"#F8FAFC"}">
+          return `<tr style="background:${i%2===0?"#151F2B":"#0F1923"}">
             <td style="padding:4px 8px;font-size:10px;font-weight:700;color:${i<3?"#B45309":"#94A3B8"}">${i+1}</td>
-            <td style="padding:4px 8px;font-size:10px;color:#0F172A;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.film}</td>
+            <td style="padding:4px 8px;font-size:10px;color:#E2E8F0;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${f.film}</td>
             <td style="padding:4px 8px"><span style="font-size:8px;padding:1px 6px;border-radius:20px;background:${gc}22;color:${gc};border:1px solid ${gc}44;font-weight:700">${f.genere||"—"}</span></td>
-            <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#0F172A;text-align:right">${fmtFull(f.presenze)}</td>
+            <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right">${fmtFull(f.presenze)}</td>
             <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#1D4ED8;text-align:right">${share}%</td>
-            <td style="padding:4px 8px"><div style="background:#E2E8F0;border-radius:4px;height:10px;overflow:hidden"><div style="width:${barW}%;height:100%;background:${gc};border-radius:4px"></div></div></td>
+            <td style="padding:4px 8px"><div style="background:#1E2D3D;border-radius:4px;height:10px;overflow:hidden"><div style="width:${barW}%;height:100%;background:${gc};border-radius:4px"></div></div></td>
           </tr>`;
         }).join("")}
       `)}
@@ -1791,21 +1778,21 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
     const cinemasSection = `<div class="section" style="margin-bottom:14px">
       ${secTitle("🏛️", "Top 10 Complessi per Presenze", "#0F766E", "#F0FDFA", "#99F6E4")}
       ${tableWrap(`
-        <tr style="background:#F1F5F9"><th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">#</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">Cinema</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">Città</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;border-bottom:1px solid #E2E8F0">Pv</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:right;border-bottom:1px solid #E2E8F0">Presenze</th>
-        <th style="padding:5px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0;width:120px">Bar</th></tr>
+        <tr style="background:#0A1628"><th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">#</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">Cinema</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">Città</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;border-bottom:1px solid #1E2D3D">Pv</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:right;border-bottom:1px solid #1E2D3D">Presenze</th>
+        <th style="padding:5px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D;width:120px">Bar</th></tr>
         ${topCinema.map((c,i)=>{
           const barW = Math.max(3,(c.presenze/maxCin*100)).toFixed(1);
-          return `<tr style="background:${i%2===0?"#FFFFFF":"#F8FAFC"}">
+          return `<tr style="background:${i%2===0?"#151F2B":"#0F1923"}">
             <td style="padding:4px 8px;font-size:10px;font-weight:700;color:${i<3?"#0F766E":"#94A3B8"}">${i+1}</td>
-            <td style="padding:4px 8px;font-size:10px;color:#0F172A;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.cinema}</td>
-            <td style="padding:4px 8px;font-size:10px;color:#64748B">${c.citta}</td>
+            <td style="padding:4px 8px;font-size:10px;color:#E2E8F0;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.cinema}</td>
+            <td style="padding:4px 8px;font-size:10px;color:#94A3B8">${c.citta}</td>
             <td style="padding:4px 8px"><span style="font-size:8px;padding:1px 5px;border-radius:4px;background:#E0F2FE;color:#0369A1;font-weight:700">${c.prov}</span></td>
-            <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#0F172A;text-align:right">${fmtFull(c.presenze)}</td>
-            <td style="padding:4px 8px"><div style="background:#E2E8F0;border-radius:4px;height:10px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#0F766E;border-radius:4px"></div></div></td>
+            <td style="padding:4px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right">${fmtFull(c.presenze)}</td>
+            <td style="padding:4px 8px"><div style="background:#1E2D3D;border-radius:4px;height:10px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#0F766E;border-radius:4px"></div></div></td>
           </tr>`;
         }).join("")}
       `)}
@@ -1816,15 +1803,15 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
         <div class="section">
           ${secTitle("🗺️", "Regioni", "#7C3AED", "#FAF5FF", "#E9D5FF")}
           ${tableWrap(`
-            <tr style="background:#F1F5F9"><th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">Regione</th>
-            <th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:right;border-bottom:1px solid #E2E8F0">Presenze</th>
-            <th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0;width:80px">Bar</th></tr>
+            <tr style="background:#0A1628"><th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">Regione</th>
+            <th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:right;border-bottom:1px solid #1E2D3D">Presenze</th>
+            <th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D;width:80px">Bar</th></tr>
             ${topRegioni.map((r,i)=>{
               const barW = Math.max(3,(r.presenze/maxReg*100)).toFixed(1);
-              return `<tr style="background:${i%2===0?"#FFFFFF":"#F8FAFC"}">
-                <td style="padding:3px 8px;font-size:10px;color:#334155">${r.regione}</td>
-                <td style="padding:3px 8px;font-size:10px;font-weight:700;color:#0F172A;text-align:right">${fmtFull(r.presenze)}</td>
-                <td style="padding:3px 8px"><div style="background:#E2E8F0;border-radius:3px;height:9px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#7C3AED;border-radius:3px"></div></div></td>
+              return `<tr style="background:${i%2===0?"#151F2B":"#0F1923"}">
+                <td style="padding:3px 8px;font-size:10px;color:#CBD5E0">${r.regione}</td>
+                <td style="padding:3px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right">${fmtFull(r.presenze)}</td>
+                <td style="padding:3px 8px"><div style="background:#1E2D3D;border-radius:3px;height:9px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#7C3AED;border-radius:3px"></div></div></td>
               </tr>`;
             }).join("")}
           `)}
@@ -1832,15 +1819,15 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
         <div class="section">
           ${secTitle("📍", "Top Province", "#DC2626", "#FFF1F2", "#FECDD3")}
           ${tableWrap(`
-            <tr style="background:#F1F5F9"><th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0">Prov.</th>
-            <th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:right;border-bottom:1px solid #E2E8F0">Presenze</th>
-            <th style="padding:4px 8px;font-size:9px;color:#64748B;text-align:left;border-bottom:1px solid #E2E8F0;width:80px">Bar</th></tr>
+            <tr style="background:#0A1628"><th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D">Prov.</th>
+            <th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:right;border-bottom:1px solid #1E2D3D">Presenze</th>
+            <th style="padding:4px 8px;font-size:9px;color:#94A3B8;text-align:left;border-bottom:1px solid #1E2D3D;width:80px">Bar</th></tr>
             ${topProv.map((p,i)=>{
               const barW = Math.max(3,(p.presenze/maxProv*100)).toFixed(1);
-              return `<tr style="background:${i%2===0?"#FFFFFF":"#F8FAFC"}">
+              return `<tr style="background:${i%2===0?"#151F2B":"#0F1923"}">
                 <td style="padding:3px 8px;font-size:10px;font-weight:700;color:#DC2626">${p.prov}</td>
-                <td style="padding:3px 8px;font-size:10px;font-weight:700;color:#0F172A;text-align:right">${fmtFull(p.presenze)}</td>
-                <td style="padding:3px 8px"><div style="background:#E2E8F0;border-radius:3px;height:9px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#DC2626;border-radius:3px"></div></div></td>
+                <td style="padding:3px 8px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right">${fmtFull(p.presenze)}</td>
+                <td style="padding:3px 8px"><div style="background:#1E2D3D;border-radius:3px;height:9px;overflow:hidden"><div style="width:${barW}%;height:100%;background:#DC2626;border-radius:3px"></div></div></td>
               </tr>`;
             }).join("")}
           `)}
@@ -1855,39 +1842,40 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap');
   * { box-sizing:border-box; margin:0; padding:0; }
-  body { font-family:'Inter',Arial,sans-serif; font-size:11px; color:#334155; background:#F8FAFC; min-height:100vh; }
+  body { font-family:'Inter',Arial,sans-serif; font-size:11px; color:#CBD5E0; background:#0F1923; min-height:100vh; }
   .wrap { max-width:1100px; margin:0 auto; padding:28px 32px 60px; }
-  .header { display:flex; justify-content:space-between; align-items:center; background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; padding:20px 28px; margin-bottom:20px; box-shadow:0 1px 4px rgba(0,0,0,0.06); }
-  .header img { height:44px; object-fit:contain; }
+  .header { display:flex; justify-content:space-between; align-items:center; background:#151F2B; border:1px solid #1E2D3D; border-radius:12px; padding:20px 28px; margin-bottom:20px; }
+  .header img { height:44px; object-fit:contain; filter:brightness(1.1); }
   .header-right { text-align:right; }
-  .header-right h1 { font-size:18px; font-weight:800; color:#0F172A; font-family:Georgia,serif; margin-bottom:5px; }
-  .header-right p { font-size:10px; color:#64748B; line-height:1.6; }
-  .header-right .badge { display:inline-block; background:#D9770612; border:1px solid #D9770644; color:#B45309; border-radius:5px; padding:2px 9px; font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-top:4px; }
+  .header-right h1 { font-size:18px; font-weight:800; color:#F1F5F9; font-family:Georgia,serif; margin-bottom:5px; }
+  .header-right p { font-size:10px; color:#94A3B8; line-height:1.6; }
+  .header-right .badge { display:inline-block; background:#D9770618; border:1px solid #D9770633; color:#D97706; border-radius:5px; padding:2px 9px; font-size:9px; font-weight:700; letter-spacing:1px; text-transform:uppercase; margin-top:4px; }
   .kpi-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(130px,1fr)); gap:10px; margin-bottom:20px; }
-  .kpi { background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; padding:14px 16px; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .kpi { background:#151F2B; border:1px solid #1E2D3D; border-radius:10px; padding:14px 16px; transition:border-color 0.2s; }
+  .kpi:hover { border-color:#2D4060; }
   .kpi-icon { font-size:18px; margin-bottom:6px; }
-  .kpi-label { font-size:8px; color:#94A3B8; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:5px; font-weight:600; }
+  .kpi-label { font-size:8px; color:#64748B; text-transform:uppercase; letter-spacing:1.2px; margin-bottom:5px; font-weight:600; }
   .kpi-value { font-size:16px; font-weight:800; font-family:Georgia,serif; }
-  .kpi-sub { font-size:9px; color:#94A3B8; margin-top:2px; }
-  .section { background:#FFFFFF; border:1px solid #E2E8F0; border-radius:10px; margin-bottom:14px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.04); }
+  .kpi-sub { font-size:9px; color:#64748B; margin-top:2px; }
+  .section { background:#151F2B; border:1px solid #1E2D3D; border-radius:10px; margin-bottom:14px; overflow:hidden; }
   .section-header { padding:10px 16px; font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:1.5px; }
   .section-body { padding:14px 16px; }
   .two-col { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
   .bar-table { width:100%; border-collapse:collapse; }
-  .bar-table td { padding:3px 5px; color:#334155; }
-  .divider { border:none; border-top:1px solid #E2E8F0; margin:20px 0; }
-  .page-sep { border:none; border-top:2px solid #CBD5E0; margin:32px 0; }
+  .bar-table td { padding:3px 5px; }
+  .divider { border:none; border-top:1px solid #1E2D3D; margin:20px 0; }
+  .page-sep { border:none; border-top:2px solid #1E2D3D; margin:32px 0; }
   .data-table { width:100%; border-collapse:collapse; }
-  .data-table tr:nth-child(odd) { background:#F8FAFC; }
-  .data-table td { padding:5px 12px; font-size:10px; border-bottom:1px solid #E2E8F0; color:#64748B; }
-  .data-table td:last-child { text-align:right; font-weight:700; color:#0F172A; }
+  .data-table tr:nth-child(odd) { background:#0F1923; }
+  .data-table td { padding:5px 12px; font-size:10px; border-bottom:1px solid #1E2D3D; color:#94A3B8; }
+  .data-table td:last-child { text-align:right; font-weight:700; color:#E2E8F0; }
   .profile-bar { display:flex; align-items:center; gap:8px; margin-bottom:5px; }
-  .profile-bar-label { width:72px; font-size:9px; color:#64748B; text-align:right; }
-  .profile-bar-track { flex:1; background:#E2E8F0; border-radius:4px; height:10px; overflow:hidden; }
+  .profile-bar-label { width:72px; font-size:9px; color:#94A3B8; text-align:right; }
+  .profile-bar-track { flex:1; background:#1E2D3D; border-radius:4px; height:10px; overflow:hidden; }
   .profile-bar-fill { height:100%; border-radius:4px; }
-  .profile-bar-pct { width:34px; font-size:9px; font-weight:700; color:#0F172A; }
-  .profile-sub-label { font-size:9px; font-weight:700; color:#0F172A; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid; padding-bottom:4px; margin-bottom:10px; margin-top:14px; }
-  @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; background:#FFFFFF; } }
+  .profile-bar-pct { width:34px; font-size:9px; font-weight:700; color:#E2E8F0; }
+  .profile-sub-label { font-size:9px; font-weight:700; color:#E2E8F0; text-transform:uppercase; letter-spacing:1px; border-bottom:2px solid; padding-bottom:4px; margin-bottom:10px; margin-top:14px; }
+  @media print { body { background:white; color:#0F172A; } .section,.header { background:white; border-color:#E2E8F0; } .kpi { background:#F8FAFC; border-color:#E2E8F0; } .kpi-value { color:#B45309 !important; } .data-table tr:nth-child(odd){ background:#F8FAFC; } .data-table td { color:#64748B; } .data-table td:last-child { color:#0F172A; } .bar-table td { color:#334155; } }
 </style>
 </head>
 <body>
@@ -1916,63 +1904,63 @@ ${geoSection}
   <div class="section">
     <div style="font-size:9px;font-weight:800;color:#16A34A;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#16A34A15;border-bottom:1px solid #16A34A30">📋 Cinema CO₂ Report Card</div>
     <table style="width:100%;border-collapse:collapse">
-      ${co2Rows.map(([k,v,h,c])=>`<tr style="background:${h?"#F0FDF4":"#FFFFFF"}"><td style="padding:5px 12px;font-size:10px;color:#64748B;border-bottom:1px solid #E2E8F0">${k}</td><td style="padding:5px 12px;font-size:10px;font-weight:${h?700:600};color:${c||"#0F172A"};text-align:right;border-bottom:1px solid #E2E8F0">${v}</td></tr>`).join("")}
+      ${co2Rows.map(([k,v,h,c])=>`<tr style="background:${h?"#0F1923":"#151F2B"}"><td style="padding:5px 12px;font-size:10px;color:#94A3B8;border-bottom:1px solid #1E2D3D">${k}</td><td style="padding:5px 12px;font-size:10px;font-weight:${h?700:600};color:${c||"#E2E8F0"};text-align:right;border-bottom:1px solid #1E2D3D">${v}</td></tr>`).join("")}
     </table>
   </div>
   <div class="section">
     <div style="font-size:9px;font-weight:800;color:#3B82F6;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#3B82F615;border-bottom:1px solid #3B82F630">⏱ Attenzione — APM</div>
     <table style="width:100%;border-collapse:collapse">
-      <tr style="background:#F8FAFC"><td style="padding:5px 12px;font-size:10px;color:#64748B;border-bottom:1px solid #E2E8F0">APM Cinema (secondi totali)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#1D4ED8;text-align:right;border-bottom:1px solid #E2E8F0">${fmtFull(apm)} sec</td></tr>
-      <tr style="background:#FFFFFF"><td style="padding:5px 12px;font-size:10px;color:#64748B;border-bottom:1px solid #E2E8F0">APM Digital equiv.</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#DC2626;text-align:right;border-bottom:1px solid #E2E8F0">${fmtFull(apmD)} sec</td></tr>
-      <tr style="background:#F8FAFC"><td style="padding:5px 12px;font-size:10px;color:#64748B;border-bottom:1px solid #E2E8F0">Vantaggio attenzione</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#1D4ED8;text-align:right;border-bottom:1px solid #E2E8F0">${(APM_C/APM_D).toFixed(1)}x</td></tr>
-      <tr style="background:#FFFFFF"><td style="padding:5px 12px;font-size:10px;color:#64748B;border-bottom:1px solid #E2E8F0">APM Cinema / 1.000 adm.</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#0F172A;text-align:right;border-bottom:1px solid #E2E8F0">${fmtFull(APM_C)} sec</td></tr>
-      <tr style="background:#F8FAFC"><td style="padding:5px 12px;font-size:10px;color:#64748B">CO₂ Cinema (kg)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#16A34A;text-align:right">${co2r.toFixed(1)}</td></tr>
-      <tr><td style="padding:4px 10px;font-size:10px;color:#64748B">CO₂ Digital equiv. (kg)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#DC2626;text-align:right">${digR.toFixed(1)}</td></tr>
-      <tr style="background:#F8FAFC"><td style="padding:5px 12px;font-size:10px;color:#64748B">Digital / Cinema ratio</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#16A34A;text-align:right">${ratioR.toFixed(1)}x</td></tr>
-      <tr><td style="padding:4px 10px;font-size:10px;color:#64748B">Alberi equiv. (EPA 21.77 kg/yr)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#0F766E;text-align:right">${treesR.toFixed(1)}</td></tr>
+      <tr style="background:#0F1923"><td style="padding:5px 12px;font-size:10px;color:#94A3B8;border-bottom:1px solid #1E2D3D">APM Cinema (secondi totali)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#60A5FA;text-align:right;border-bottom:1px solid #1E2D3D">${fmtFull(apm)} sec</td></tr>
+      <tr style="background:#151F2B"><td style="padding:5px 12px;font-size:10px;color:#94A3B8;border-bottom:1px solid #1E2D3D">APM Digital equiv.</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#F87171;text-align:right;border-bottom:1px solid #1E2D3D">${fmtFull(apmD)} sec</td></tr>
+      <tr style="background:#0F1923"><td style="padding:5px 12px;font-size:10px;color:#94A3B8;border-bottom:1px solid #1E2D3D">Vantaggio attenzione</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#60A5FA;text-align:right;border-bottom:1px solid #1E2D3D">${(APM_C/APM_D).toFixed(1)}x</td></tr>
+      <tr style="background:#151F2B"><td style="padding:5px 12px;font-size:10px;color:#94A3B8;border-bottom:1px solid #1E2D3D">APM Cinema / 1.000 adm.</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#E2E8F0;text-align:right;border-bottom:1px solid #1E2D3D">${fmtFull(APM_C)} sec</td></tr>
+      <tr style="background:#0F1923"><td style="padding:5px 12px;font-size:10px;color:#94A3B8">CO₂ Cinema (kg)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#4ADE80;text-align:right">${co2r.toFixed(1)}</td></tr>
+      <tr><td style="padding:4px 10px;font-size:10px;color:#94A3B8">CO₂ Digital equiv. (kg)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#F87171;text-align:right">${digR.toFixed(1)}</td></tr>
+      <tr style="background:#0F1923"><td style="padding:5px 12px;font-size:10px;color:#94A3B8">Digital / Cinema ratio</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#4ADE80;text-align:right">${ratioR.toFixed(1)}x</td></tr>
+      <tr><td style="padding:4px 10px;font-size:10px;color:#94A3B8">Alberi equiv. (EPA 21.77 kg/yr)</td><td style="padding:5px 12px;font-size:10px;font-weight:700;color:#2DD4BF;text-align:right">${treesR.toFixed(1)}</td></tr>
     </table>
   </div>
 </div>
 
 ${ _bestProf ? `
-<hr class="divider"/>
+<hr class="page-sep"/>
 <div class="section" style="margin-bottom:14px">
-  <div style="font-size:9px;font-weight:800;color:#7C3AED;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#7C3AED15;border-bottom:1px solid #7C3AED30">👥 Profilo Spettatore — Audience del Periodo</div>
+  <div style="font-size:9px;font-weight:800;color:#A78BFA;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#A78BFA15;border-bottom:1px solid #A78BFA30">👥 Profilo Spettatore — Audience del Periodo</div>
   <div style="padding:18px 16px">
-    <div style="font-size:10px;color:#64748B;margin-bottom:16px">Fonte: Cinexpert · ${_bestProfLabel}</div>
+    <div style="font-size:10px;color:#94A3B8;margin-bottom:16px">Fonte: Cinexpert · ${_bestProfLabel}</div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
       <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #7C3AED;padding-bottom:4px">SESSO</div>
-        ${[['Donna',_bestProf.female?.pct,'#A855F7'],['Uomo',_bestProf.male?.pct,'#3B82F6']].map(([l,v,c])=>v!=null?`
+        <div style="font-size:9px;font-weight:800;color:#E2E8F0;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #7C3AED;padding-bottom:4px">SESSO</div>
+        ${[['Donna',_bestProf.female?.pct,'#E879F9'],['Uomo',_bestProf.male?.pct,'#60A5FA']].map(([l,v,c])=>v!=null?`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
+          <div style="width:70px;font-size:9px;color:#94A3B8;text-align:right">${l}</div>
+          <div style="flex:1;background:#1E2D3D;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700;color:#E2E8F0">${v?.toFixed(1)}%</div>
         </div>`:'').join('')}
       </div>
       <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #D97706;padding-bottom:4px">FASCIA D'ETÀ</div>
+        <div style="font-size:9px;font-weight:800;color:#E2E8F0;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #D97706;padding-bottom:4px">FASCIA D'ETÀ</div>
         ${[['3-10',_bestProf.age_3_10?.pct],['11-14',_bestProf.age_11_14?.pct],['15-24',_bestProf.age_15_24?.pct],['25-34',_bestProf.age_25_34?.pct],['35-49',_bestProf.age_35_49?.pct],['50-59',_bestProf.age_50_59?.pct],['60-69',_bestProf.age_60_69?.pct],['70+',_bestProf.age_70plus?.pct]].map(([l,v])=>v!=null?`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:#D97706;height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
+          <div style="width:70px;font-size:9px;color:#94A3B8;text-align:right">${l}</div>
+          <div style="flex:1;background:#1E2D3D;border-radius:3px;height:10px"><div style="width:${v}%;background:#D97706;height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700;color:#E2E8F0">${v?.toFixed(1)}%</div>
         </div>`:'').join('')}
       </div>
       <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #16A34A;padding-bottom:4px">STATUS SOCIO-ECON.</div>
+        <div style="font-size:9px;font-weight:800;color:#E2E8F0;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #16A34A;padding-bottom:4px">STATUS SOCIO-ECON.</div>
         ${[['Alto',_bestProf.census_high?.pct,'#16A34A'],['Medio-alto',_bestProf.census_medium_high?.pct,'#16A34A'],['Medio-basso',_bestProf.census_low?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
+          <div style="width:70px;font-size:9px;color:#94A3B8;text-align:right">${l}</div>
+          <div style="flex:1;background:#1E2D3D;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700;color:#E2E8F0">${v?.toFixed(1)}%</div>
         </div>`:'').join('')}
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-bottom:2px solid #2563EB;padding-bottom:4px">FREQUENZA</div>
+        <div style="font-size:9px;font-weight:800;color:#E2E8F0;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-bottom:2px solid #2563EB;padding-bottom:4px">FREQUENZA</div>
         ${[['Frequente',_bestProf.freq_frequent?.pct,'#2563EB'],['Regular',_bestProf.freq_regular?.pct,'#2563EB'],['Casual',_bestProf.freq_casual?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
         <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
+          <div style="width:70px;font-size:9px;color:#94A3B8;text-align:right">${l}</div>
+          <div style="flex:1;background:#1E2D3D;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700;color:#E2E8F0">${v?.toFixed(1)}%</div>
         </div>`:'').join('')}
       </div>
     </div>
@@ -1982,50 +1970,50 @@ ${ _bestProf ? `
 
 <hr class="page-sep"/>
 <div class="section" style="margin-bottom:14px">
-  <div style="font-size:9px;font-weight:800;color:#1D4ED8;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#1D4ED815;border-bottom:1px solid #1D4ED830">📐 Nota Metodologica — L'Attenzione al Cinema</div>
+  <div style="font-size:9px;font-weight:800;color:#60A5FA;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#60A5FA15;border-bottom:1px solid #60A5FA30">📐 Nota Metodologica — L'Attenzione al Cinema</div>
   <div style="padding:20px 18px">
-    <p style="font-size:11px;color:#334155;line-height:1.7;margin:0 0 12px">
+    <p style="font-size:11px;color:#CBD5E0;line-height:1.7;margin:0 0 12px">
       <strong>Che cos'è l'APM (Attentive Seconds per Mille)?</strong><br/>
       L'APM è l'unità di misura dell'efficacia dell'attenzione. Indica il numero totale di secondi di attenzione reale generati ogni 1.000 impression (contatti). Mentre le metriche tradizionali misurano l'erogazione del messaggio (la "possibilità" di essere visti), l'APM quantifica l'impatto reale: quanto tempo il pubblico ha effettivamente mantenuto lo sguardo sullo schermo durante lo spot.
     </p>
   </div>
 
-  <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:20px 22px;margin-bottom:16px">
-    <div style="font-size:11px;font-weight:800;color:#16A34A;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">🔬 La Ricerca "Beyond Visual Attention"</div>
-    <p style="font-size:11px;color:#334155;line-height:1.7;margin:0 0 10px">
+  <div style="background:#16A34A12;border:1px solid #16A34A30;border-radius:10px;padding:20px 22px;margin-bottom:16px">
+    <div style="font-size:11px;font-weight:800;color:#4ADE80;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">🔬 La Ricerca "Beyond Visual Attention"</div>
+    <p style="font-size:11px;color:#CBD5E0;line-height:1.7;margin:0 0 10px">
       I calcoli di attenzione presenti in questo report si basano sulle evidenze della ricerca <em>"Beyond Visual Attention"</em>, promossa da FCP-Associnema.
     </p>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px">
-      <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:14px">
-        <div style="font-size:10px;font-weight:800;color:#16A34A;margin-bottom:6px">📷 METODOLOGIA</div>
-        <div style="font-size:10px;color:#64748B;line-height:1.6">Lo studio è stato condotto attraverso un sistema di rilevazione avanzato basato su videocamere a infrarossi e intelligenza artificiale, tracciando il vettore dello sguardo con precisione inferiore al secondo.</div>
+      <div style="background:#151F2B;border:1px solid #1E2D3D;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#4ADE80;margin-bottom:6px">📷 METODOLOGIA</div>
+        <div style="font-size:10px;color:#94A3B8;line-height:1.6">Lo studio è stato condotto attraverso un sistema di rilevazione avanzato basato su videocamere a infrarossi e intelligenza artificiale, tracciando il vettore dello sguardo con precisione inferiore al secondo.</div>
       </div>
-      <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:14px">
-        <div style="font-size:10px;font-weight:800;color:#16A34A;margin-bottom:6px">🏆 RISULTATI CHIAVE</div>
-        <div style="font-size:10px;color:#64748B;line-height:1.6">Il Cinema ha una capacità di cattura dell'attenzione superiore a qualsiasi altro mezzo (media del 90%), mantenendo livelli stabili di concentrazione per tutta la durata del break pubblicitario.</div>
+      <div style="background:#151F2B;border:1px solid #1E2D3D;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#4ADE80;margin-bottom:6px">🏆 RISULTATI CHIAVE</div>
+        <div style="font-size:10px;color:#94A3B8;line-height:1.6">Il Cinema ha una capacità di cattura dell'attenzione superiore a qualsiasi altro mezzo (media del 90%), mantenendo livelli stabili di concentrazione per tutta la durata del break pubblicitario.</div>
       </div>
-      <div style="background:#FFFFFF;border:1px solid #E2E8F0;border-radius:8px;padding:14px">
-        <div style="font-size:10px;font-weight:800;color:#16A34A;margin-bottom:6px">📊 VANTAGGIO ATTENZIONE</div>
-        <div style="font-size:10px;color:#64748B;line-height:1.6">Il dato "Vantaggio Attenzione" (es. 4.5x) indica quante volte l'attenzione generata dal Cinema è superiore rispetto alla media dei canali Digitali, a parità di contatti.</div>
+      <div style="background:#151F2B;border:1px solid #1E2D3D;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#4ADE80;margin-bottom:6px">📊 VANTAGGIO ATTENZIONE</div>
+        <div style="font-size:10px;color:#94A3B8;line-height:1.6">Il dato "Vantaggio Attenzione" (es. 4.5x) indica quante volte l'attenzione generata dal Cinema è superiore rispetto alla media dei canali Digitali, a parità di contatti.</div>
       </div>
     </div>
   </div>
 
-  <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:16px 20px">
-    <div style="font-size:10px;color:#92400E;line-height:1.7">
+  <div style="background:#D9770615;border:1px solid #D9770633;border-radius:10px;padding:16px 20px">
+    <div style="font-size:10px;color:#FCD34D;line-height:1.7">
       I dati completi della ricerca <em>"Beyond Visual Attention"</em> sono riservati e non pubblicati integralmente.<br/>
       Per approfondimenti o per richiedere l'accesso ai dati di dettaglio:<br/>
-      <strong style="color:#B45309">📧 info@moviemedia.it</strong>
+      <strong style="color:#FCD34D">📧 info@moviemedia.it</strong>
     </div>
   </div>
 </div>
 
 </div>
-<div style="border-top:1px solid #E2E8F0;padding:16px 0;font-size:9px;color:#94A3B8;line-height:2;margin-top:20px">
-  <strong style="color:#64748B">📊 Nota Metodologica CO₂</strong> &nbsp;·&nbsp; Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
+<div style="border-top:1px solid #1E2D3D;padding:16px 0;font-size:9px;color:#64748B;line-height:2;margin-top:20px">
+  <strong style="color:#94A3B8">📊 Nota Metodologica CO₂</strong> &nbsp;·&nbsp; Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
   Source: ISPRA 2024 / Lumen Research / CSRD (EU) 2022/2464 &nbsp;·&nbsp; Values require independent verification for official reporting.<br/>
   Cinema CO₂ = Spots × SpotDuration / 3600 × kWh × Grid factor &nbsp;·&nbsp; Digital CO₂ = 0.668 kg / 1,000 impressions &nbsp;·&nbsp; APM (Attention Per Mille) = secondi di attenzione attiva per 1.000 spettatori · Cinema: 25.700 sec · Digital: 5.700 sec<br/>
-  <strong style="color:#64748B">Moviemedia S.r.l.</strong> &nbsp;·&nbsp; La pubblicità al cinema &nbsp;·&nbsp; moviemedia.it
+  <strong style="color:#94A3B8">Moviemedia S.r.l.</strong> &nbsp;·&nbsp; La pubblicità al cinema &nbsp;·&nbsp; moviemedia.it
 </div>
 
 </div>
@@ -2513,8 +2501,7 @@ ${ _bestProf ? `
 }
 function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, onSelect, onNew, onEdit, onBack }) {
   const totalI = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); return a+(r.presenze||c.impressions||0); },0);
-  const totalSpots = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+eff; },0);
-  const totalCO2 = campaigns.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); const eff=(c.spots||0)>0?c.spots:(r.spettacoli||0); return a+(c.co2Saved||calcCO2(c.tipo||c.type,eff,c.spotSec||30)); },0);
+  const totalCO2 = campaigns.reduce((a,c)=>a+c.co2Saved,0);
   const active = campaigns.filter(c=>c.status==="active").length;
   return (
     <div style={{ paddingBottom:60 }}>
@@ -2533,9 +2520,8 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:24 }}>
           <KpiCard icon="📋" label="Campagne"       value={campaigns.length}   accent={client.color} />
           <KpiCard icon="✅" label="Attive"          value={active}             accent={C.green} />
-          <KpiCard icon="🎟️" label="Admissions tot." value={fmt(totalI)}        accent={C.gold} sub="Da dati importati" />
-          <KpiCard icon="📽️" label="Spot totali"     value={fmtFull(totalSpots)} accent={C.purple} sub="Da dati importati" />
-          <KpiCard icon="🌿" label="CO₂ risparmiata" value={fmtFull(Math.round(totalCO2))+" kg"} accent={C.green} />
+          <KpiCard icon="🎟️" label="Admissions tot." value={fmt(totalI)}        accent={C.gold} sub="Somma campagne" />
+          <KpiCard icon="🌿" label="CO₂ risparmiata" value={fmtFull(totalCO2)+" kg"} accent={C.green} />
         </div>
         {campaigns.length===0
           ? <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}><div style={{ fontSize:40, marginBottom:12 }}>🎬</div><p>Nessuna campagna ancora</p></div>
@@ -2544,7 +2530,6 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
                 const cd=circuitData[c.period]||Object.values(circuitData)[0];
                 const campR = computeCampaignAdmissions(c, circuitData, circuitDef);
                 const displayAdm = campR.presenze || c.impressions || 0;
-                return (
                   <div key={c.id} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.background="#1C2430";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface;}}
