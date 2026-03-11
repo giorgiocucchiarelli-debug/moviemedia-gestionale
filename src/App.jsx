@@ -2928,8 +2928,11 @@ export default function App() {
   };
 
   const handleImportProfile = (data) => {
-    const nc = { ...profileData, [data.key]: data };
-    setProfileData(nc); save("mm_profile_v1", nc);
+    setProfileData(prev => {
+      const nc = { ...prev, [data.key]: data };
+      save("mm_profile_v1", nc);
+      return nc;
+    });
   };
 
   const handleImport = (data) => {
