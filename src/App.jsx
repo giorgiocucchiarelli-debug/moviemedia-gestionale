@@ -1660,6 +1660,25 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   if (!cd && !hasRealData) return <div style={{ padding:60, textAlign:"center", color:C.sub }}>Importa almeno un periodo che copra le date della campagna.</div>;
 
   const handlePrint = () => {
+    // Compute best profile for this campaign period
+    const _profiles = Object.values(profileData||{}).sort((a,b)=>a.key.localeCompare(b.key));
+    const _campFrom = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
+    const _campTo   = campaign.dateTo   ? new Date(campaign.dateTo)   : null;
+    let _bestProf = null, _bestProfLabel = "";
+    for (const p of _profiles) {
+      const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
+      if (!wm) continue;
+      const year = parseInt(wm[1]), week = parseInt(wm[2]);
+      const jan4 = new Date(year, 0, 4);
+      const ws = new Date(jan4.getTime() + (week-1)*7*86400000);
+      ws.setDate(ws.getDate() - (ws.getDay()||7) + 1);
+      const we = new Date(ws.getTime() + 6*86400000);
+      if (_campFrom && _campTo && ws <= _campTo && we >= _campFrom) {
+        _bestProf = p.profile; _bestProfLabel = p.label; break;
+      }
+    }
+    if (!_bestProf && _profiles.length > 0) { _bestProf = _profiles[0].profile; _bestProfLabel = _profiles[0].label; }
+
     const co2r   = campaign.co2Saved || calcCO2(campaign.tipo||campaign.type, effectiveSpots, campaign.spotSec||30);
     const digR   = calcDigCO2(realAdm);
     const treesR = co2r/TREE;
@@ -1881,7 +1900,52 @@ ${cinemasSection}
   </div>
 </div>
 
-<div style="page-break-before:always;padding:32px 40px;font-family:'Helvetica Neue',Arial,sans-serif">
+${ _bestProf ? `
+<div style="page-break-before:always;padding:32px 40px 0;font-family:'Helvetica Neue',Arial,sans-serif">
+  <div style="background:#F5F3FF;border:1px solid #DDD6FE;border-radius:10px;padding:24px 28px">
+    <div style="font-size:10px;font-weight:800;color:#7C3AED;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">👥 Profilo Spettatore</div>
+    <div style="font-size:15px;font-weight:800;color:#0F172A;margin-bottom:4px">Audience del Periodo</div>
+    <div style="font-size:10px;color:#64748B;margin-bottom:20px">Fonte: Cinexpert · ${_bestProfLabel}</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
+      <div>
+        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #7C3AED;padding-bottom:4px">SESSO</div>
+        ${[['Donna',_bestProf.female?.pct,'#E879F9'],['Uomo',_bestProf.male?.pct,'#60A5FA']].map(([l,v,c])=>v!=null?`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:70px;font-size:9px;color:#475569;text-align:right">${l}</div>
+          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700">${v?.toFixed(1)}%</div>
+        </div>`:'').join('')}
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #D97706;padding-bottom:4px">FASCIA D'ETÀ</div>
+        ${[['3-10',_bestProf.age_3_10?.pct],['11-14',_bestProf.age_11_14?.pct],['15-24',_bestProf.age_15_24?.pct],['25-34',_bestProf.age_25_34?.pct],['35-49',_bestProf.age_35_49?.pct],['50-59',_bestProf.age_50_59?.pct],['60-69',_bestProf.age_60_69?.pct],['70+',_bestProf.age_70plus?.pct]].map(([l,v])=>v!=null?`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <div style="width:70px;font-size:9px;color:#475569;text-align:right">${l}</div>
+          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:#D97706;height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700">${v?.toFixed(1)}%</div>
+        </div>`:'').join('')}
+      </div>
+      <div>
+        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #16A34A;padding-bottom:4px">STATUS SOCIO-ECON.</div>
+        ${[['Alto',_bestProf.census_high?.pct,'#16A34A'],['Medio-alto',_bestProf.census_medium_high?.pct,'#16A34A'],['Medio-basso',_bestProf.census_low?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:70px;font-size:9px;color:#475569;text-align:right">${l}</div>
+          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700">${v?.toFixed(1)}%</div>
+        </div>`:'').join('')}
+        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-bottom:2px solid #2563EB;padding-bottom:4px">FREQUENZA</div>
+        ${[['Frequente',_bestProf.freq_frequent?.pct,'#2563EB'],['Regular',_bestProf.freq_regular?.pct,'#2563EB'],['Casual',_bestProf.freq_casual?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+          <div style="width:70px;font-size:9px;color:#475569;text-align:right">${l}</div>
+          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
+          <div style="width:32px;font-size:9px;font-weight:700">${v?.toFixed(1)}%</div>
+        </div>`:'').join('')}
+      </div>
+    </div>
+  </div>
+</div>` : '' }
+
+<div style="page-break-before:always;padding:32px 40px 0;font-family:'Helvetica Neue',Arial,sans-serif">
   <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:24px 28px;margin-bottom:20px">
     <div style="font-size:13px;font-weight:800;color:#1D4ED8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">📐 Nota Metodologica</div>
     <div style="font-size:18px;font-weight:800;color:#0F172A;margin-bottom:16px">L'Attenzione al Cinema</div>
@@ -2214,17 +2278,18 @@ ${cinemasSection}
             let bestProfile = profiles[0];
             if (campFrom && campTo && profiles.length > 1) {
               // Find the profile week that falls within campaign dates
-              const matched = profiles.filter(p => {
-                const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
-                if (!wm) return false;
-                const year = parseInt(wm[1]), week = parseInt(wm[2]);
-                // Compute week start (ISO week)
-                const jan4 = new Date(year, 0, 4);
-                const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
-                weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1);
-                const weekEnd = new Date(weekStart.getTime() + 6 * 86400000);
-                return weekStart <= campTo && weekEnd >= campFrom;
-              });
+              const matched = profiles
+                .filter(p => {
+                  const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
+                  if (!wm) return false;
+                  const year = parseInt(wm[1]), week = parseInt(wm[2]);
+                  const jan4 = new Date(year, 0, 4);
+                  const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+                  weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1);
+                  const weekEnd = new Date(weekStart.getTime() + 6 * 86400000);
+                  return weekStart <= campTo && weekEnd >= campFrom;
+                })
+                .sort((a,b) => a.key.localeCompare(b.key)); // earliest first
               if (matched.length > 0) bestProfile = matched[0];
             }
             const prof = bestProfile?.profile;
