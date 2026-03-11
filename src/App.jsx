@@ -1720,7 +1720,6 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
       ["APM Cinema",           fmtFull(apm)+" sec",                          "#1D4ED8"],  // blue
       ["APM Digital equiv.",   fmtFull(apmD)+" sec",                         "#DC2626"],  // red
       ["Vantaggio attenzione", (APM_C/APM_D).toFixed(1)+"x",                "#1D4ED8"],  // blue
-      ["Investimento",         fmtEur(campaign.budget),                      "#0F172A"],  // dark
       ["Alberi equiv. (EPA)",  treesR.toFixed(1),                            "#15803D"],  // green
     ];
 
@@ -1882,6 +1881,46 @@ ${cinemasSection}
   </div>
 </div>
 
+<div style="page-break-before:always;padding:32px 40px;font-family:'Helvetica Neue',Arial,sans-serif">
+  <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:24px 28px;margin-bottom:20px">
+    <div style="font-size:13px;font-weight:800;color:#1D4ED8;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:4px">📐 Nota Metodologica</div>
+    <div style="font-size:18px;font-weight:800;color:#0F172A;margin-bottom:16px">L'Attenzione al Cinema</div>
+    <p style="font-size:11px;color:#334155;line-height:1.7;margin:0 0 12px">
+      <strong>Che cos'è l'APM (Attentive Seconds per Mille)?</strong><br/>
+      L'APM è l'unità di misura dell'efficacia dell'attenzione. Indica il numero totale di secondi di attenzione reale generati ogni 1.000 impression (contatti). Mentre le metriche tradizionali misurano l'erogazione del messaggio (la "possibilità" di essere visti), l'APM quantifica l'impatto reale: quanto tempo il pubblico ha effettivamente mantenuto lo sguardo sullo schermo durante lo spot.
+    </p>
+  </div>
+
+  <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px;padding:24px 28px;margin-bottom:20px">
+    <div style="font-size:13px;font-weight:800;color:#15803D;text-transform:uppercase;letter-spacing:1.5px;margin-bottom:12px">🔬 La Ricerca "Beyond Visual Attention"</div>
+    <p style="font-size:11px;color:#334155;line-height:1.7;margin:0 0 10px">
+      I calcoli di attenzione presenti in questo report si basano sulle evidenze della ricerca <em>"Beyond Visual Attention"</em>, promossa da FCP-Associnema.
+    </p>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-top:14px">
+      <div style="background:white;border:1px solid #BBF7D0;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#15803D;margin-bottom:6px">📷 METODOLOGIA</div>
+        <div style="font-size:10px;color:#475569;line-height:1.6">Lo studio è stato condotto attraverso un sistema di rilevazione avanzato basato su videocamere a infrarossi e intelligenza artificiale, tracciando il vettore dello sguardo con precisione inferiore al secondo.</div>
+      </div>
+      <div style="background:white;border:1px solid #BBF7D0;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#15803D;margin-bottom:6px">🏆 RISULTATI CHIAVE</div>
+        <div style="font-size:10px;color:#475569;line-height:1.6">Il Cinema ha una capacità di cattura dell'attenzione superiore a qualsiasi altro mezzo (media del 90%), mantenendo livelli stabili di concentrazione per tutta la durata del break pubblicitario.</div>
+      </div>
+      <div style="background:white;border:1px solid #BBF7D0;border-radius:8px;padding:14px">
+        <div style="font-size:10px;font-weight:800;color:#15803D;margin-bottom:6px">📊 VANTAGGIO ATTENZIONE</div>
+        <div style="font-size:10px;color:#475569;line-height:1.6">Il dato "Vantaggio Attenzione" (es. 4.5x) indica quante volte l'attenzione generata dal Cinema è superiore rispetto alla media dei canali Digitali, a parità di contatti.</div>
+      </div>
+    </div>
+  </div>
+
+  <div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:20px 28px">
+    <div style="font-size:10px;color:#92400E;line-height:1.7">
+      I dati completi della ricerca <em>"Beyond Visual Attention"</em> sono riservati e non pubblicati integralmente.<br/>
+      Per approfondimenti o per richiedere l'accesso ai dati di dettaglio:<br/>
+      <strong style="color:#C2410C">📧 info@moviemedia.it</strong>
+    </div>
+  </div>
+</div>
+
 </div>
 <div class="disclaimer">
   Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
@@ -1955,7 +1994,6 @@ ${cinemasSection}
           {campaign.admissionTarget > 0 && <KpiCard icon="🎯" label="Admission Target" value={fmt(campaign.admissionTarget)} sub="Piano media" accent={C.teal} />}
           <KpiCard icon="⏱" label="APM Cinema" value={fmt(calcAPM(realAdm))} sub={`vs ${fmt(Math.round((realAdm/1000)*APM_D))} digital`} accent={C.teal} />
           <KpiCard icon="📽️" label="Spot erogati" value={fmtFull(effectiveSpots)} sub={effectiveSpots===campAdm.spettacoli?"da dati import.":"da campagna"} accent={C.purple} />
-          <KpiCard icon="💶" label="Investimento" value={fmtEur(campaign.budget)} accent={C.blue} />
         </div>
 
         {/* CO2 block */}
@@ -2315,7 +2353,6 @@ ${cinemasSection}
                 ["🎟️","Admissions",fmtFull(realAdm)],
                 ["📽️","Spot erogati",fmtFull(effectiveSpots)],
                 ["⏱","APM Cinema",fmtFull(calcAPM(realAdm))+" sec"],
-                ["💶","Investimento",fmtEur(campaign.budget)],
                 ...(campaign.admissionTarget>0?[["🎯","Admission Target",fmtFull(campaign.admissionTarget)+" ("+pct+"%)"]]:[]),
               ].map(([icon,label,value])=>(
                 <div key={label} style={{ background:"#F8FAFC", border:"1px solid #E2E8F0", borderRadius:8, padding:"10px 12px" }}>
