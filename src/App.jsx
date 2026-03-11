@@ -2612,6 +2612,21 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
   const filtered = clients.filter(cl=>cl.name.toLowerCase().includes(search.toLowerCase())||cl.sector?.toLowerCase().includes(search.toLowerCase()));
   const campsFor  = (id) => filterPeriod==="all" ? (campaigns[id]||[]) : (campaigns[id]||[]).filter(c=>c.period===filterPeriod);
 
+  // Memoize per-client admission totals to avoid recomputing on every render
+  const clientAdmMap = useMemo(() => {
+    const map = {};
+    clients.forEach(cl => {
+      const cc = filterPeriod==="all" ? (campaigns[cl.id]||[]) : (campaigns[cl.id]||[]).filter(c=>c.period===filterPeriod);
+      map[cl.id] = cc.reduce((a,c) => {
+        try {
+          const r = computeCampaignAdmissions(c, circuitData, circuitDef);
+          return a + (r.presenze || Number(c.impressions) || 0);
+        } catch { return a + (Number(c.impressions) || 0); }
+      }, 0);
+    });
+    return map;
+  }, [clients, campaigns, circuitData, circuitDef, filterPeriod]);
+
   return (
     <div style={{ paddingBottom:60 }}>
       <div style={{ background:`linear-gradient(90deg,${C.bg} 0%,${C.surface} 50%,${C.bg} 100%)`, borderBottom:`1px solid ${C.border}`, padding:"16px 40px", display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:12 }}>
@@ -2673,7 +2688,7 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
               {filtered.map((client)=>{
                 const cc     = campsFor(client.id);
                 const active = cc.filter(c=>c.status==="active").length;
-                const totalI = cc.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); return a+(r.presenze||c.impressions||0); },0);
+                const totalI = clientAdmMap[client.id] || 0;
                 const totalB = cc.reduce((a,c)=>a+c.budget,0);
                 const hasUnder= cc.some(c=>c.admissionTarget>0&&c.impressions<c.admissionTarget);
                 const statuses=[...new Set(cc.map(c=>c.status))];
@@ -2780,9 +2795,21 @@ function AgenzieScreen({ clients, campaigns, circuitData, onSelectCampaign }) {
   });
   const agenzieList = Object.entries(agenzieMap).sort((a,b)=>a[0].localeCompare(b[0]));
 
+  // Memoize admission computation for all campaigns to avoid recomputing on every render
+  const admissionMap = useMemo(() => {
+    const map = {};
+    allCamps.forEach(c => {
+      try {
+        const r = computeCampaignAdmissions(c, circuitData, circuitDef);
+        map[c.id] = r.presenze > 0 ? r.presenze : (Number(c.impressions) || 0);
+      } catch { map[c.id] = Number(c.impressions) || 0; }
+    });
+    return map;
+  }, [allCamps, circuitData, circuitDef]);
+
   if (selAgenzia) {
     const camps = agenzieMap[selAgenzia] || [];
-    const totalI = camps.reduce((a,c)=>a+c.impressions,0);
+    const totalI = camps.reduce((a,c)=>a+(admissionMap[c.id]||0),0);
     const totalB = camps.reduce((a,c)=>a+c.budget,0);
     const totalCO2 = camps.reduce((a,c)=>a+c.co2Saved,0);
     const active = camps.filter(c=>c.status==="active").length;
@@ -2807,17 +2834,18 @@ function AgenzieScreen({ clients, campaigns, circuitData, onSelectCampaign }) {
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {camps.map(c => {
               const cd = circuitData[c.period] || Object.values(circuitData)[0];
+              const displayAdm = admissionMap[c.id] || 0;
               return (
                 <div key={c.id} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto auto 1fr auto auto auto", alignItems:"center", gap:16, transition:"box-shadow 0.15s" }}
                   onMouseEnter={e=>e.currentTarget.style.boxShadow=`0 4px 16px ${C.border2}`}
                   onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}
                   onClick={()=>onSelectCampaign(c.clientId, c.id)}>
-                  <div style={{ width:40, height:40, borderRadius:10, background:c.type==="circuit"?`${C.gold}18`:`${C.blue}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{c.type==="circuit"?"🎭":"🎬"}</div>
+                  <div style={{ width:40, height:40, borderRadius:10, background:c.type==="circuit"||c.tipo==="circuit"?`${C.gold}18`:`${C.blue}18`, display:"flex", alignItems:"center", justifyContent:"center", fontSize:18 }}>{c.type==="circuit"||c.tipo==="circuit"?"🎭":"🎬"}</div>
                   <div style={{ width:6, height:40, borderRadius:3, background:c.clientColor }} />
                   <div>
                     <div style={{ fontWeight:700, color:C.text, marginBottom:2 }}>{c.name}</div>
                     <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>{c.clientName}</div>
-                    <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{c.type==="circuit"?"Intero circuito":`Film: ${c.film}`} · {cd?.label||c.period} · {c.dateFrom} → {c.dateTo}</div>
+                    <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{c.type==="circuit"||c.tipo==="circuit"?"Intero circuito":`Film: ${c.film||""}`} · {cd?.label||c.period||"—"} · {String(c.dateFrom||"")} → {String(c.dateTo||"")}</div>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontSize:15, fontWeight:800, color:C.gold }}>{displayAdm > 0 ? fmt(displayAdm) : "—"}</div>
@@ -2860,7 +2888,7 @@ function AgenzieScreen({ clients, campaigns, circuitData, onSelectCampaign }) {
             </thead>
             <tbody>
               {filtered.map(([name, camps])=>{
-                const totalI = camps.reduce((a,c)=>a+c.impressions,0);
+                const totalI = camps.reduce((a,c)=>a+(admissionMap[c.id]||0),0);
                 const totalB = camps.reduce((a,c)=>a+c.budget,0);
                 const uniqueClients = [...new Set(camps.map(c=>c.clientId))];
                 const statuses = [...new Set(camps.map(c=>c.status))];
