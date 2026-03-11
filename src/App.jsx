@@ -338,9 +338,11 @@ function parseCinexpertProfile(file, onDone, onError) {
       }
 
       // Derive week key from label (e.g. "week 01 - 01-07 Gennaio" -> "2026-W01")
+      // Try to get week number from internal label first, then fallback to filename
       const wMatch = periodLabel.match(/week\s*(\d+)/i);
-      const weekNum = wMatch ? wMatch[1].padStart(2,"0") : "00";
-      const yearMatch = periodLabel.match(/(20\d\d)/);
+      const wMatchFile = file.name.match(/WEEK[_-]?(\d+)/i);
+      const weekNum = (wMatchFile ? wMatchFile[1] : wMatch ? wMatch[1] : "00").padStart(2,"0");
+      const yearMatch = periodLabel.match(/(20\d\d)/) || file.name.match(/(20\d\d)/);
       const year = yearMatch ? yearMatch[1] : new Date().getFullYear();
       const key = `profile-${year}-W${weekNum}`;
 
