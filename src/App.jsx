@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { dbGet, dbSet } from "./db.js";
@@ -1632,7 +1632,10 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   const isAreale  = tipo==="areale";
 
   // KEY FUNCTION: compute real admissions from ALL imported periods overlapping campaign dates
-  const campAdm = computeCampaignAdmissions(campaign, circuitData, circuitDef);
+  const campAdm = useMemo(
+    () => computeCampaignAdmissions(campaign, circuitData, circuitDef),
+    [campaign, circuitData, circuitDef]
+  );
   const realAdm     = campAdm.presenze;
   const realSpett   = campAdm.spettacoli;
   const periodsUsed = campAdm.periodsUsed || [];
@@ -2512,20 +2515,23 @@ ${ _bestProf ? `
   );
 }
 function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, onSelect, onNew, onEdit, onBack }) {
-  // Single pass: compute all aggregates together to avoid triple-calling computeCampaignAdmissions
-  let totalI = 0, totalSpots = 0, totalCO2 = 0;
-  const campResults = campaigns.map(c => {
-    try {
-      const r   = computeCampaignAdmissions(c, circuitData, circuitDef);
-      const adm = (typeof r.presenze === "number" ? r.presenze : 0) || (Number(c.impressions) || 0);
-      const eff = (Number(c.spots) || 0) > 0 ? Number(c.spots) : (typeof r.spettacoli === "number" ? r.spettacoli : 0);
-      const co2 = Number(c.co2Saved) || calcCO2(c.tipo || c.type, eff, Number(c.spotSec) || 30);
-      totalI     += adm;
-      totalSpots += eff;
-      totalCO2   += (isFinite(co2) ? co2 : 0);
-      return { adm, eff, co2 };
-    } catch(e) { return { adm:0, eff:0, co2:0 }; }
-  });
+  // Memoize heavy computation — only recalculates when campaigns/circuitData change
+  const { campResults, totalI, totalSpots, totalCO2 } = useMemo(() => {
+    let totalI = 0, totalSpots = 0, totalCO2 = 0;
+    const campResults = campaigns.map(c => {
+      try {
+        const r   = computeCampaignAdmissions(c, circuitData, circuitDef);
+        const adm = (typeof r.presenze === "number" ? r.presenze : 0) || (Number(c.impressions) || 0);
+        const eff = (Number(c.spots) || 0) > 0 ? Number(c.spots) : (typeof r.spettacoli === "number" ? r.spettacoli : 0);
+        const co2 = Number(c.co2Saved) || calcCO2(c.tipo || c.type, eff, Number(c.spotSec) || 30);
+        totalI     += adm;
+        totalSpots += eff;
+        totalCO2   += (isFinite(co2) ? co2 : 0);
+        return { adm, eff, co2 };
+      } catch(e) { return { adm:0, eff:0, co2:0 }; }
+    });
+    return { campResults, totalI, totalSpots, totalCO2 };
+  }, [campaigns, circuitData, circuitDef]);
   const active = campaigns.filter(c=>c.status==="active").length;
   return (
     <div style={{ paddingBottom:60 }}>
