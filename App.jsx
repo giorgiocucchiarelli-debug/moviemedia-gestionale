@@ -59,7 +59,7 @@ const BUILTIN_CIRCUIT = {};
 
 // ─── DEMO SEED DATA ───────────────────────────────────────────────────────────
 const DEMO_USERS = [
-  { id:"u1", name:"Admin Moviemedia", username:"admin",    password:"admin123",   role:"admin",  clientId:null },
+  { id:"u1", name:"Admin Moviemedia", username:"admin",    password:"admin123",   role:"superadmin", clientId:null },
   { id:"u2", name:"Referente Fiat",   username:"fiat",     password:"fiat123",    role:"viewer", clientId:"c1" },
   { id:"u3", name:"Referente Barilla",username:"barilla",  password:"barilla123", role:"viewer", clientId:"c2" },
   { id:"u4", name:"Referente Trenita",username:"trenitalia",password:"treni123",  role:"viewer", clientId:"c3" },
@@ -1008,7 +1008,7 @@ function UserModal({ initial, clients, onSave, onClose }) {
           <div style={s.field}>
             <label style={s.label}>Ruolo</label>
             <div style={{ display:"flex", gap:8 }}>
-              {[["admin","🔑 Admin"],["viewer","👁 View-only"]].map(([v,l])=>(
+              {[["superadmin","⭐ Super Admin"],["admin","🔑 Admin (traffico)"],["viewer","👁 Viewer (cliente)"]].map(([v,l])=>(
                 <button key={v} onClick={()=>set("role",v)} style={{ flex:1, background:form.role===v?`${C.gold}18`:"transparent", border:`1px solid ${form.role===v?C.gold:C.border2}`, borderRadius:8, color:form.role===v?C.gold:C.sub, padding:"9px 0", cursor:"pointer", fontWeight:700, fontSize:12, fontFamily:"inherit" }}>{l}</button>
               ))}
             </div>
@@ -1053,7 +1053,7 @@ function UsersScreen({ users, clients, campaigns, currentUser, onAdd, onEdit, on
       </div>
       <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit,minmax(140px,1fr))", gap:12, marginBottom:28 }}>
         <KpiCard icon="👥" label="Utenti totali"  value={users.length}                                    accent={C.gold}   />
-        <KpiCard icon="🔑" label="Admin"           value={users.filter(u=>u.role==="admin").length}        accent={C.purple} />
+        <KpiCard icon="🔑" label="Admin / Super"           value={users.filter(u=>u.role==="admin"||u.role==="superadmin").length}        accent={C.purple} />
         <KpiCard icon="👁" label="View-only"       value={users.filter(u=>u.role==="viewer").length}       accent={C.blue}   />
         <KpiCard icon="🏢" label="Clienti coperti" value={new Set(users.filter(u=>u.clientId).map(u=>u.clientId)).size} accent={C.teal} />
       </div>
@@ -1088,7 +1088,7 @@ function UsersScreen({ users, clients, campaigns, currentUser, onAdd, onEdit, on
                   <td style={{ padding:"12px 16px", color:C.sub, fontFamily:"monospace" }}>{u.username}</td>
                   <td style={{ padding:"12px 16px" }}>
                     <span style={{ background:u.role==="admin"?`${C.purple}22`:`${C.blue}22`, color:u.role==="admin"?C.purple:C.blue, border:`1px solid ${u.role==="admin"?`${C.purple}44`:`${C.blue}44`}`, borderRadius:20, padding:"3px 10px", fontSize:9, fontWeight:700 }}>
-                      {u.role==="admin"?"🔑 Admin":"👁 View-only"}
+                      {u.role==="superadmin"?"⭐ Super Admin":u.role==="admin"?"🔑 Admin":"👁 Viewer"}
                     </span>
                   </td>
                   <td style={{ padding:"12px 16px" }}>
@@ -2914,7 +2914,8 @@ export default function App() {
   };
   const handleLogout = () => { setCurrentUser(null); setView("list"); setSelClient(null); setSelCamp(null); setAdminTab("clients"); };
 
-  const isAdmin  = currentUser?.role==="admin";
+  const isSuperAdmin = currentUser?.role==="superadmin";
+  const isAdmin  = currentUser?.role==="admin" || isSuperAdmin;
   const isViewer = currentUser?.role==="viewer";
 
   const addClient = (cl, newUser) => {
@@ -3064,7 +3065,7 @@ export default function App() {
           onClose={()=>setBackupModal(null)}
         />
       )}
-      {isAdmin && (
+      {isSuperAdmin && (
         <AiAssistant
           clients={clients}
           campaigns={campaigns}
