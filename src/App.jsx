@@ -2531,6 +2531,7 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
                 const campR = computeCampaignAdmissions(c, circuitData, circuitDef);
                 const displayAdm = campR.presenze || c.impressions || 0;
                   <div key={c.id} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
+                    return (
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.background="#1C2430";}}
                     onMouseLeave={e=>{e.currentTarget.style.borderColor=C.border; e.currentTarget.style.background=C.surface;}}
                     onClick={()=>onSelect(c)}>
