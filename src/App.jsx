@@ -2062,7 +2062,7 @@ ${ _exportProfs.length > 0 ? `
 </div>
 
 </div>
-<div style="border-top:1px solid #E2E8F0;padding:16px 0;font-size:9px;color:#94A3B8;line-height:2;margin-top:20px">
+<div style="border-top:2px solid #E2E8F0;padding:18px 32px 24px;font-size:9px;color:#94A3B8;line-height:2;margin-top:28px;background:#F8FAFC;border-radius:0 0 12px 12px">
   <strong style="color:#64748B">📊 Nota Metodologica CO₂</strong> &nbsp;·&nbsp; Methodology: ISO 14067 &nbsp;·&nbsp; Scope: projection, audio, HVAC, lighting, DCP delivery, server &nbsp;·&nbsp; Embodied carbon excluded (negligible over equipment lifespan)<br/>
   Source: ISPRA 2024 / Lumen Research / CSRD (EU) 2022/2464 &nbsp;·&nbsp; Values require independent verification for official reporting.<br/>
   Cinema CO₂ = Spots × SpotDuration / 3600 × kWh × Grid factor &nbsp;·&nbsp; Digital CO₂ = 0.668 kg / 1,000 impressions &nbsp;·&nbsp; APM (Attention Per Mille) = secondi di attenzione attiva per 1.000 spettatori · Cinema: 25.700 sec · Digital: 5.700 sec<br/>
