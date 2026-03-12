@@ -1716,12 +1716,15 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
     }
     // Fallback: use first available profile
     if (_matchedProfs.length === 0 && _profiles.length > 0) _matchedProfs.push(_profiles[0]);
+    // Keep all matched weeks for side-by-side display in export
+    const _exportProfs = _matchedProfs; // array of {key, label, profile, ...}
+    // Also compute averaged profile for the header label
     let _bestProf = null, _bestProfLabel = "";
     if (_matchedProfs.length === 1) {
       _bestProf = _matchedProfs[0].profile;
       _bestProfLabel = _matchedProfs[0].label;
     } else if (_matchedProfs.length > 1) {
-      // Average all numeric pct fields across matched weeks
+      // Average all numeric pct fields across matched weeks (used only for legacy references)
       const keys = ["female","male","age_3_10","age_11_14","age_15_24","age_25_34","age_35_49","age_50_59","age_60_69","age_70plus","census_high","census_medium_high","census_low","freq_frequent","freq_regular","freq_casual"];
       _bestProf = {};
       for (const k of keys) {
@@ -1973,49 +1976,48 @@ ${geoSection}
   </div>
 </div>
 
-${ _bestProf ? `
+${ _exportProfs.length > 0 ? `
 <hr class="divider"/>
 <div class="section" style="margin-bottom:14px">
-  <div style="font-size:9px;font-weight:800;color:#7C3AED;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#7C3AED15;border-bottom:1px solid #7C3AED30">👥 Profilo Spettatore — Audience del Periodo</div>
-  <div style="padding:18px 16px">
-    <div style="font-size:10px;color:#64748B;margin-bottom:16px">Fonte: Cinexpert · ${_bestProfLabel}</div>
-    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:24px">
-      <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #7C3AED;padding-bottom:4px">SESSO</div>
-        ${[['Donna',_bestProf.female?.pct,'#A855F7'],['Uomo',_bestProf.male?.pct,'#3B82F6']].map(([l,v,c])=>v!=null?`
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
-        </div>`:'').join('')}
-      </div>
-      <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #D97706;padding-bottom:4px">FASCIA D'ETÀ</div>
-        ${[['3-10',_bestProf.age_3_10?.pct],['11-14',_bestProf.age_11_14?.pct],['15-24',_bestProf.age_15_24?.pct],['25-34',_bestProf.age_25_34?.pct],['35-49',_bestProf.age_35_49?.pct],['50-59',_bestProf.age_50_59?.pct],['60-69',_bestProf.age_60_69?.pct],['70+',_bestProf.age_70plus?.pct]].map(([l,v])=>v!=null?`
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:#D97706;height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
-        </div>`:'').join('')}
-      </div>
-      <div>
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;border-bottom:2px solid #16A34A;padding-bottom:4px">STATUS SOCIO-ECON.</div>
-        ${[['Alto',_bestProf.census_high?.pct,'#16A34A'],['Medio-alto',_bestProf.census_medium_high?.pct,'#16A34A'],['Medio-basso',_bestProf.census_low?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
-        </div>`:'').join('')}
-        <div style="font-size:9px;font-weight:800;color:#0F172A;text-transform:uppercase;letter-spacing:1px;margin:14px 0 10px;border-bottom:2px solid #2563EB;padding-bottom:4px">FREQUENZA</div>
-        ${[['Frequente',_bestProf.freq_frequent?.pct,'#2563EB'],['Regular',_bestProf.freq_regular?.pct,'#2563EB'],['Casual',_bestProf.freq_casual?.pct,'#94A3B8']].map(([l,v,c])=>v!=null?`
-        <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-          <div style="width:70px;font-size:9px;color:#64748B;text-align:right">${l}</div>
-          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:10px"><div style="width:${v}%;background:${c};height:100%;border-radius:3px"></div></div>
-          <div style="width:32px;font-size:9px;font-weight:700;color:#0F172A">${v?.toFixed(1)}%</div>
-        </div>`:'').join('')}
-      </div>
+  <div style="font-size:9px;font-weight:800;color:#7C3AED;text-transform:uppercase;letter-spacing:1.5px;padding:10px 14px;background:#7C3AED15;border-bottom:1px solid #7C3AED30">👥 Profilo Spettatore — ${_exportProfs.length > 1 ? `${_exportProfs.length} Settimane nel Periodo` : 'Audience del Periodo'}</div>
+  <div style="padding:14px 16px">
+    <div style="font-size:9px;color:#64748B;margin-bottom:14px">Fonte: Cinexpert · ${_exportProfs.map(p=>p.label).join(' · ')}</div>
+    <div style="display:grid;grid-template-columns:${_exportProfs.map(()=>'1fr').join(' ')};gap:16px">
+      ${_exportProfs.map((pw, wi) => {
+        const prof = pw.profile;
+        if (!prof) return '';
+        const WEEK_COLORS = ['#7C3AED','#1D4ED8','#0F766E','#16A34A'];
+        const wc = WEEK_COLORS[wi % WEEK_COLORS.length];
+        const profBar = (label, pct, color) => pct != null ? `
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <div style="width:65px;font-size:8px;color:#64748B;text-align:right;flex-shrink:0">${label}</div>
+          <div style="flex:1;background:#E2E8F0;border-radius:3px;height:9px"><div style="width:${pct}%;background:${color};height:100%;border-radius:3px"></div></div>
+          <div style="width:30px;font-size:8px;font-weight:700;color:#0F172A">${pct.toFixed(1)}%</div>
+        </div>` : '';
+        return `<div style="border:1px solid ${wc}30;border-radius:10px;padding:12px 14px;background:${wc}06">
+          <div style="font-size:10px;font-weight:800;color:${wc};margin-bottom:3px">${pw.label}</div>
+          <div style="font-size:8px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin-top:10px;margin-bottom:6px;border-bottom:1px solid ${wc}30;padding-bottom:3px">SESSO</div>
+          ${profBar('Donna',prof.female?.pct,'#A855F7')}
+          ${profBar('Uomo',prof.male?.pct,'#3B82F6')}
+          <div style="font-size:8px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin-top:10px;margin-bottom:6px;border-bottom:1px solid ${wc}30;padding-bottom:3px">FASCIA D'ETÀ</div>
+          ${profBar('3-10',prof.age_3_10?.pct,'#D97706')}
+          ${profBar('11-14',prof.age_11_14?.pct,'#D97706')}
+          ${profBar('15-24',prof.age_15_24?.pct,'#D97706')}
+          ${profBar('25-34',prof.age_25_34?.pct,'#D97706')}
+          ${profBar('35-49',prof.age_35_49?.pct,'#D97706')}
+          ${profBar('50-59',prof.age_50_59?.pct,'#D97706')}
+          ${profBar('60-69',prof.age_60_69?.pct,'#D97706')}
+          ${profBar('70+',prof.age_70plus?.pct,'#D97706')}
+          <div style="font-size:8px;font-weight:700;color:#64748B;text-transform:uppercase;letter-spacing:1px;margin-top:10px;margin-bottom:6px;border-bottom:1px solid ${wc}30;padding-bottom:3px">STATUS & FREQUENZA</div>
+          ${profBar('Alto',prof.census_high?.pct,'#16A34A')}
+          ${profBar('Medio-alto',prof.census_medium_high?.pct,'#16A34A')}
+          ${profBar('Medio-basso',prof.census_low?.pct,'#94A3B8')}
+          ${profBar('Frequente',prof.freq_frequent?.pct,'#2563EB')}
+          ${profBar('Regular',prof.freq_regular?.pct,'#2563EB')}
+          ${profBar('Casual',prof.freq_casual?.pct,'#94A3B8')}
+        </div>`;
+      }).join('')}
     </div>
-  </div>
   </div>
 </div>` : '' }
 
@@ -2341,68 +2343,136 @@ ${ _bestProf ? `
               </tbody>
             </table>
           </div>
-          {/* ─── PROFILO SPETTATORE ─── */}
+          {/* ─── PROFILO SPETTATORE (tutte le settimane sovrapposte alla campagna) ─── */}
           {(() => {
             if (!profileData || Object.keys(profileData).length === 0) return null;
-            // Find the profile whose week overlaps the campaign period
-            const profiles = Object.values(profileData).filter(p => p && typeof p.key === "string").sort((a,b)=>b.key.localeCompare(a.key));
-            // Try to match by campaign dates: key format profile-YYYY-WNN
             const campFrom = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
             const campTo   = campaign.dateTo   ? new Date(campaign.dateTo)   : null;
-            let bestProfile = profiles[0];
-            if (campFrom && campTo && profiles.length > 1) {
-              // Find the profile week that falls within campaign dates
-              const matched = profiles
-                .filter(p => {
-                  const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
-                  if (!wm) return false;
-                  const year = parseInt(wm[1]), week = parseInt(wm[2]);
-                  const jan4 = new Date(year, 0, 4);
-                  const weekStart = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
-                  weekStart.setDate(weekStart.getDate() - (weekStart.getDay() || 7) + 1);
-                  const weekEnd = new Date(weekStart.getTime() + 6 * 86400000);
-                  return weekStart <= campTo && weekEnd >= campFrom;
-                })
-                .sort((a,b) => a.key.localeCompare(b.key)); // earliest first
-              if (matched.length > 0) bestProfile = matched[0];
+            const allProfiles = Object.values(profileData).filter(p => p && typeof p.key === "string");
+
+            // Helper: compute ISO week start/end from profile key
+            const getWeekRange = (p) => {
+              const wm = p.key.match(/profile-(\d{4})-W(\d{2})/);
+              if (!wm) return null;
+              const year = parseInt(wm[1]), week = parseInt(wm[2]);
+              const jan4 = new Date(year, 0, 4);
+              const ws = new Date(jan4.getTime() + (week - 1) * 7 * 86400000);
+              ws.setDate(ws.getDate() - (ws.getDay() || 7) + 1);
+              const we = new Date(ws.getTime() + 6 * 86400000);
+              return { ws, we };
+            };
+
+            // Find ALL weeks overlapping the campaign period
+            let matchedProfiles = allProfiles
+              .filter(p => {
+                if (!campFrom || !campTo) return true;
+                const r = getWeekRange(p);
+                if (!r) return false;
+                return r.ws <= campTo && r.we >= campFrom;
+              })
+              .sort((a, b) => a.key.localeCompare(b.key)); // chronological order
+
+            // Fallback: use most recent if nothing matched
+            if (matchedProfiles.length === 0) {
+              const fallback = allProfiles.sort((a,b)=>b.key.localeCompare(a.key))[0];
+              if (fallback) matchedProfiles = [fallback];
             }
-            const prof = bestProfile?.profile;
-            if (!prof) return null;
-            // Bar component defined at module level as ProfileBar
-            return (
-              <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20, background:`${C.purple}06`, border:`1px solid ${C.purple}22` }}>
-                <SectionTitle accent={C.purple}>👥 Profilo Spettatore</SectionTitle>
-                <div style={{ fontSize:10, color:C.sub, marginBottom:16 }}>Fonte: Cinexpert · {bestProfile?.label}</div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:20 }}>
+            if (matchedProfiles.length === 0) return null;
+
+            // Per-week profile card
+            const ProfileWeekCard = ({ pw, accentColor, weekIdx, totalWeeks }) => {
+              const prof = pw?.profile;
+              if (!prof) return null;
+              const r = getWeekRange(pw);
+              const fmt2d = (d) => d ? `${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}` : "";
+              const dateRange = r ? `${fmt2d(r.ws)} – ${fmt2d(r.we)}` : pw.label;
+              const isCovered = campFrom && campTo && r && r.ws >= campFrom && r.we <= campTo;
+              const isPartial = !isCovered && r && campFrom && campTo && (r.ws < campFrom || r.we > campTo);
+              return (
+                <div style={{ background:`${accentColor}08`, border:`1px solid ${accentColor}30`, borderRadius:12, padding:"16px 18px", flex:1, minWidth:0 }}>
+                  {/* Week header */}
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:14, paddingBottom:10, borderBottom:`1px solid ${accentColor}20` }}>
+                    <div>
+                      <div style={{ fontSize:11, fontWeight:800, color:accentColor, letterSpacing:0.5 }}>{pw.label}</div>
+                      <div style={{ fontSize:9, color:C.sub, marginTop:2 }}>{dateRange}</div>
+                    </div>
+                    <span style={{
+                      fontSize:8, fontWeight:700, padding:"2px 8px", borderRadius:20,
+                      background: isCovered ? `${C.green}22` : isPartial ? `${C.gold}22` : `${C.border}`,
+                      color: isCovered ? C.green : isPartial ? C.gold : C.sub,
+                      border: `1px solid ${isCovered ? C.green : isPartial ? C.gold : C.border}44`
+                    }}>
+                      {isCovered ? "✓ Periodo completo" : isPartial ? "⚡ Parziale" : "◎ Adiacente"}
+                    </span>
+                  </div>
                   {/* SESSO */}
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Sesso</div>
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:9, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Sesso</div>
                     <ProfileBar label="Donna" pct={prof.female?.pct} color="#E879F9" />
                     <ProfileBar label="Uomo"  pct={prof.male?.pct}   color="#60A5FA" />
                   </div>
                   {/* ETÀ */}
-                  <div>
-                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Fascia d'età</div>
-                    <ProfileBar label="3-10"     pct={prof.age_3_10?.pct}   color={C.gold} />
-                    <ProfileBar label="11-14"    pct={prof.age_11_14?.pct}  color={C.gold} />
-                    <ProfileBar label="15-24"    pct={prof.age_15_24?.pct}  color={C.gold} />
-                    <ProfileBar label="25-34"    pct={prof.age_25_34?.pct}  color={C.gold} />
-                    <ProfileBar label="35-49"    pct={prof.age_35_49?.pct}  color={C.gold} />
-                    <ProfileBar label="50-59"    pct={prof.age_50_59?.pct}  color={C.gold} />
-                    <ProfileBar label="60-69"    pct={prof.age_60_69?.pct}  color={C.gold} />
-                    <ProfileBar label="70+"      pct={prof.age_70plus?.pct} color={C.gold} />
+                  <div style={{ marginBottom:12 }}>
+                    <div style={{ fontSize:9, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Fascia d'età</div>
+                    <ProfileBar label="3-10"  pct={prof.age_3_10?.pct}   color={C.gold} />
+                    <ProfileBar label="11-14" pct={prof.age_11_14?.pct}  color={C.gold} />
+                    <ProfileBar label="15-24" pct={prof.age_15_24?.pct}  color={C.gold} />
+                    <ProfileBar label="25-34" pct={prof.age_25_34?.pct}  color={C.gold} />
+                    <ProfileBar label="35-49" pct={prof.age_35_49?.pct}  color={C.gold} />
+                    <ProfileBar label="50-59" pct={prof.age_50_59?.pct}  color={C.gold} />
+                    <ProfileBar label="60-69" pct={prof.age_60_69?.pct}  color={C.gold} />
+                    <ProfileBar label="70+"   pct={prof.age_70plus?.pct} color={C.gold} />
                   </div>
-                  {/* CENSO */}
+                  {/* CENSO + FREQUENZA */}
                   <div>
-                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Status socio-econ.</div>
-                    <ProfileBar label="Alto"       pct={prof.census_high?.pct}        color={C.green} />
-                    <ProfileBar label="Medio-alto" pct={prof.census_medium_high?.pct} color={C.green} />
-                    <ProfileBar label="Medio-basso"pct={prof.census_low?.pct}         color={C.muted} />
-                    <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, margin:"14px 0 10px" }}>Frequenza</div>
-                    <ProfileBar label="Frequente"  pct={prof.freq_frequent?.pct} color={C.blue} />
-                    <ProfileBar label="Regular"    pct={prof.freq_regular?.pct}  color={C.blue} />
-                    <ProfileBar label="Casual"     pct={prof.freq_casual?.pct}   color={C.muted} />
+                    <div style={{ fontSize:9, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:7 }}>Status socio-econ.</div>
+                    <ProfileBar label="Alto"        pct={prof.census_high?.pct}        color={C.green} />
+                    <ProfileBar label="Medio-alto"  pct={prof.census_medium_high?.pct} color={C.green} />
+                    <ProfileBar label="Medio-basso" pct={prof.census_low?.pct}         color={C.muted} />
+                    <div style={{ fontSize:9, fontWeight:800, color:C.sub, textTransform:"uppercase", letterSpacing:1, margin:"10px 0 7px" }}>Frequenza</div>
+                    <ProfileBar label="Frequente" pct={prof.freq_frequent?.pct} color={C.blue} />
+                    <ProfileBar label="Regular"   pct={prof.freq_regular?.pct}  color={C.blue} />
+                    <ProfileBar label="Casual"    pct={prof.freq_casual?.pct}   color={C.muted} />
                   </div>
+                </div>
+              );
+            };
+
+            // Accent colors cycling for multiple weeks
+            const WEEK_ACCENTS = [C.purple, C.blue, C.teal, C.green];
+            const hasCoverage = campFrom && campTo;
+
+            return (
+              <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20, background:`${C.purple}04`, border:`1px solid ${C.purple}18` }}>
+                <div style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between", marginBottom:4, flexWrap:"wrap", gap:8 }}>
+                  <SectionTitle accent={C.purple}>👥 Profilo Spettatore</SectionTitle>
+                  <div style={{ fontSize:10, color:C.sub, textAlign:"right", lineHeight:1.6 }}>
+                    Fonte: Cinexpert
+                    {matchedProfiles.length > 1 && <span style={{ marginLeft:6, background:`${C.purple}18`, color:C.purple, borderRadius:20, padding:"1px 8px", fontSize:9, fontWeight:700 }}>{matchedProfiles.length} settimane</span>}
+                  </div>
+                </div>
+                {/* Coverage timeline bar */}
+                {hasCoverage && (
+                  <div style={{ marginBottom:18, padding:"8px 12px", background:C.bg, borderRadius:8, fontSize:9, color:C.sub }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", marginBottom:5 }}>
+                      <span>Campagna: <strong style={{ color:C.text }}>{String(campaign.dateFrom||"")} → {String(campaign.dateTo||"")}</strong></span>
+                      {matchedProfiles.length === 1
+                        ? <span style={{ color:C.gold }}>⚠️ Solo 1 settimana nel periodo — carica più file Cinexpert per una copertura completa</span>
+                        : <span style={{ color:C.green }}>✓ {matchedProfiles.length} settimane coperte su {Math.ceil(((campTo-campFrom)/(7*86400000))+1)} nel periodo</span>}
+                    </div>
+                  </div>
+                )}
+                {/* Week cards side by side */}
+                <div style={{ display:"flex", gap:14, alignItems:"flex-start" }}>
+                  {matchedProfiles.map((pw, idx) => (
+                    <ProfileWeekCard
+                      key={pw.key}
+                      pw={pw}
+                      accentColor={WEEK_ACCENTS[idx % WEEK_ACCENTS.length]}
+                      weekIdx={idx}
+                      totalWeeks={matchedProfiles.length}
+                    />
+                  ))}
                 </div>
               </div>
             );
