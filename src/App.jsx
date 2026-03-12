@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo, Component } from "react";
 import * as XLSX from "xlsx";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell, PieChart, Pie } from "recharts";
 import { dbGet, dbSet } from "./db.js";
@@ -1591,6 +1591,31 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
   );
 }
 
+// ─── ERROR BOUNDARY ───────────────────────────────────────────────────────────
+class DashboardErrorBoundary extends Component {
+  constructor(props) { super(props); this.state = { error: null }; }
+  static getDerivedStateFromError(err) { return { error: err }; }
+  componentDidCatch(err, info) { console.error("[CampaignDashboard] Render error:", err, info); }
+  render() {
+    if (this.state.error) {
+      return (
+        <div style={{ padding:60, textAlign:"center" }}>
+          <div style={{ fontSize:36, marginBottom:16 }}>⚠️</div>
+          <div style={{ fontSize:16, fontWeight:700, color:"#DC2626", marginBottom:8 }}>Errore nel caricamento della dashboard</div>
+          <div style={{ fontSize:12, color:"#64748B", maxWidth:500, margin:"0 auto 20px", lineHeight:1.6 }}>
+            {this.state.error?.message || "Errore sconosciuto"}
+          </div>
+          <button onClick={()=>{ this.setState({error:null}); this.props.onBack?.(); }}
+            style={{ background:"#1E40AF", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            ← Torna alle campagne
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 // ─── CAMPAIGN DASHBOARD ───────────────────────────────────────────────────────
 // Profilo Spettatore bar component — defined at module level to avoid React component identity issues
 const ProfileBar = ({ label, pct, color }) => (
@@ -2064,7 +2089,7 @@ ${ _bestProf ? `
         <div style={{ flex:1 }}>
           <div style={{ fontSize:10, color:C.sub, letterSpacing:1.5, textTransform:"uppercase", marginBottom:3 }}>{clientName} · {isCircuit?"🎭 Intero Circuito":isFilm?`🎬 ${campaign.film}`:`📍 Areale`} · {campaign.dateFrom} → {campaign.dateTo}{periodsUsed.length>0?` (dati: ${periodsUsed.join(", ")})`:" (nessun dato importato)"}</div>
           <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:C.bright, letterSpacing:-0.5, fontFamily:"Georgia,serif" }}>{campaign.name}</h1>
-          {campaign.agenzia && <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>🏢 {campaign.agenzia}</div>}
+          {campaign.agenzia && <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>🏢 {String(campaign.agenzia)}</div>}
         </div>
         <Pill status={campaign.status} />
         <div style={{ background:C.bg, border:`1px solid ${C.border}`, borderRadius:8, padding:"7px 12px", fontSize:11, color:C.sub }}>{campaign.dateFrom} → {campaign.dateTo}</div>
@@ -2276,8 +2301,8 @@ ${ _bestProf ? `
                   <span style={{ fontSize:11, fontWeight:800, color:i<3?C.gold:C.muted, textAlign:"right" }}>#{i+1}</span>
                   <div>
                     <div style={{ display:"flex", alignItems:"center", gap:6, marginBottom:3 }}>
-                      <span style={{ fontSize:11, color:C.text, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:360 }}>{f.film}</span>
-                      <span style={{ fontSize:8, padding:"2px 6px", borderRadius:20, background:`${gc}22`, color:gc, border:`1px solid ${gc}44`, fontWeight:700, flexShrink:0 }}>{f.genere}</span>
+                      <span style={{ fontSize:11, color:C.text, fontWeight:600, whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", maxWidth:360 }}>{String(f.film||"")}</span>
+                      {f.genere && <span style={{ fontSize:8, padding:"2px 6px", borderRadius:20, background:`${gc}22`, color:gc, border:`1px solid ${gc}44`, fontWeight:700, flexShrink:0 }}>{String(f.genere)}</span>}
                     </div>
                     <div style={{ height:6, borderRadius:3, background:C.border, overflow:"hidden" }}>
                       <div style={{ height:"100%", width:`${pct}%`, borderRadius:3, background:`linear-gradient(90deg,${gc},${gc}88)` }} />
@@ -2298,7 +2323,7 @@ ${ _bestProf ? `
                 {["#","Cinema","Città","Pv","Presenze"].map(h=><th key={h} style={{ padding:"6px 8px", color:C.sub, fontSize:9, letterSpacing:1, textTransform:"uppercase", textAlign:h==="Presenze"?"right":"left" }}>{h}</th>)}
               </tr></thead>
               <tbody>
-                {(cd.topCinema||[]).map((c,i)=>(
+                {(cd?.topCinema||[]).map((c,i)=>(
                   <tr key={c.cinema} onMouseEnter={e=>e.currentTarget.style.background=C.bg} onMouseLeave={e=>e.currentTarget.style.background="transparent"} style={{ borderBottom:`1px solid ${C.border}` }}>
                     <td style={{ padding:"7px 8px", width:28 }}>
                       <span style={{ display:"inline-flex", alignItems:"center", justifyContent:"center", width:20, height:20, borderRadius:6, fontSize:10, fontWeight:800,
@@ -2307,9 +2332,9 @@ ${ _bestProf ? `
                         {i+1}
                       </span>
                     </td>
-                    <td style={{ padding:"7px 8px", color:C.text, fontWeight:600, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{c.cinema}</td>
-                    <td style={{ padding:"7px 8px", color:C.sub, fontSize:10 }}>{c.citta}</td>
-                    <td style={{ padding:"7px 8px" }}><span style={{ background:C.border, borderRadius:5, padding:"1px 6px", fontSize:9, fontWeight:700, color:C.teal }}>{c.prov}</span></td>
+                    <td style={{ padding:"7px 8px", color:C.text, fontWeight:600, maxWidth:150, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>{String(c.cinema||"")}</td>
+                    <td style={{ padding:"7px 8px", color:C.sub, fontSize:10 }}>{String(c.citta||"")}</td>
+                    <td style={{ padding:"7px 8px" }}><span style={{ background:C.border, borderRadius:5, padding:"1px 6px", fontSize:9, fontWeight:700, color:C.teal }}>{String(c.prov||"")}</span></td>
                     <td style={{ padding:"7px 8px", color:C.gold, fontWeight:700, textAlign:"right" }}>{fmtFull(c.presenze)}</td>
                   </tr>
                 ))}
@@ -2399,9 +2424,9 @@ ${ _bestProf ? `
             </ResponsiveContainer>
             <div style={{ display:"flex", flexWrap:"wrap", gap:"3px 10px" }}>
               {regioni.slice(0,8).map((r,i)=>(
-                <div key={r.regione} style={{ display:"flex", alignItems:"center", gap:3 }}>
+                <div key={String(r.regione||i)} style={{ display:"flex", alignItems:"center", gap:3 }}>
                   <div style={{ width:6, height:6, borderRadius:"50%", background:PIE_COLORS[i], flexShrink:0 }} />
-                  <span style={{ fontSize:9, color:C.sub }}>{r.regione.split(" ")[0]} <span style={{ color:C.text }}>{fmt(r.presenze)}</span></span>
+                  <span style={{ fontSize:9, color:C.sub }}>{String(r.regione||"").split(" ")[0]} <span style={{ color:C.text }}>{fmt(r.presenze)}</span></span>
                 </div>
               ))}
             </div>
@@ -2467,8 +2492,8 @@ ${ _bestProf ? `
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", borderBottom:"3px solid #B45309", paddingBottom:14, marginBottom:20 }}>
               <img src={LOGO_B64} alt="Moviemedia" style={{ height:52, objectFit:"contain" }} />
               <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:18, fontWeight:800, color:"#0F172A", fontFamily:"Georgia,serif" }}>{campaign.name}</div>
-                <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>{clientName} · {periodsUsed.length>0 ? periodsUsed.join(", ") : (cd?.label||campaign.period||"")} · {campaign.dateFrom} → {campaign.dateTo}</div>
+                <div style={{ fontSize:18, fontWeight:800, color:"#0F172A", fontFamily:"Georgia,serif" }}>{String(campaign.name||"")}</div>
+                <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>{clientName} · {periodsUsed.length>0 ? periodsUsed.join(", ") : (cd?.label||String(campaign.period||""))} · {String(campaign.dateFrom||"")} → {String(campaign.dateTo||"")}</div>
               </div>
             </div>
 
@@ -2509,7 +2534,7 @@ ${ _bestProf ? `
               Methodology: ISO 14067 · Scope: projection, audio, HVAC, lighting, DCP delivery, server · Embodied carbon excluded (negligible over equipment lifespan)<br/>
               Source: ISPRA 2024 / Lumen Research / CSRD (EU) 2022/2464 · Values require independent verification for official reporting.<br/>
               Estimate only. Cinema CO₂ calculated as: Spots × SpotDuration / 3600 × kWh/screen × Grid factor (kg/kWh) — Digital CO₂ estimated at 0.668 kg per 1,000 impressions.<br/>
-              <strong style="color:#94A3B8">Moviemedia S.r.l.</strong> · La pubblicità al cinema · moviemedia.it
+              <strong style={{ color:"#94A3B8" }}>Moviemedia S.r.l.</strong> · La pubblicità al cinema · moviemedia.it
             </div>
           </div>
         );
@@ -3197,7 +3222,9 @@ export default function App() {
                   onBack={()=>{setSelClient(null); setView("list");}} />
               )}
               {view==="dashboard" && selCamp && (
-                <CampaignDashboard campaign={selCamp} clientName={selClient?.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={false} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+                <DashboardErrorBoundary onBack={()=>{setSelCamp(null); setView("campaigns");}}>
+                  <CampaignDashboard campaign={selCamp} clientName={selClient?.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={false} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+                </DashboardErrorBoundary>
               )}
             </>
           )}
@@ -3223,7 +3250,9 @@ export default function App() {
               onNew={null} onEdit={null} onBack={null} />
           )}
           {view==="dashboard" && selCamp && (
-            <CampaignDashboard campaign={selCamp} clientName={viewerClient.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={true} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+            <DashboardErrorBoundary onBack={()=>{setSelCamp(null); setView("campaigns");}}>
+              <CampaignDashboard campaign={selCamp} clientName={viewerClient.name} circuitData={circuitData} circuitDef={circuitDef} profileData={profileData} isViewer={true} onBack={()=>{setSelCamp(null); setView("campaigns");}} />
+            </DashboardErrorBoundary>
           )}
         </>
       )}
