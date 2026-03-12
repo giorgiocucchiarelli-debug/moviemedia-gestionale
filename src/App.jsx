@@ -1777,7 +1777,9 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
       ["Ad Hours",             adHR.toFixed(1),           false, "#0F172A"],
       ["Total Energy (kWh)",   kwhTR.toFixed(1),          false, "#0F172A"],
       ["Grid Factor (kg/kWh)", GRID.toFixed(3),           false, "#0F172A"],
-      ["Total CO2 (kg)",       co2r.toFixed(1),           true,  "#15803D"],
+      ["CO2 emessa Cinema (kg)",co2r.toFixed(1),          true,  "#15803D"],
+      ["CO2 equiv. Digital (kg)",(digR).toFixed(1),       false, "#DC2626"],
+      ["CO2 risparmiata vs Dig.",(digR-co2r).toFixed(1)+" kg", true, "#15803D"],
       ["mgCO2 per Impression", gpiR.toFixed(4),           true,  "#15803D"],
       ["gCO2 per 1,000 Impr.", gpmR.toFixed(2),           true,  "#15803D"],
       ["gCO2 per Att. Second", gpsR.toFixed(6),           true,  "#15803D"],
@@ -2149,14 +2151,14 @@ ${ _exportProfs.length > 0 ? `
           const mx   = Math.max(co2, dig, 1);
           return (
             <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20 }}>
-              <SectionTitle accent={C.green}>🌿 CO₂ & Attenzione · Analisi Impatto</SectionTitle>
+              <SectionTitle accent={C.green}>🌿 CO₂ & Attenzione · Emissioni e Risparmio</SectionTitle>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
                 {/* CO2 comparison bars */}
                 <div>
-                  <div style={{ fontSize:10, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>CO₂ Cinema vs Digital</div>
+                  <div style={{ fontSize:10, color:C.sub, textTransform:"uppercase", letterSpacing:1, marginBottom:12 }}>CO₂ emessa: Cinema vs Digital (a parità di attenzione)</div>
                   <div style={{ marginBottom:10 }}>
                     <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
-                      <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>🎬 Cinema</span>
+                      <span style={{ fontSize:11, color:C.green, fontWeight:700 }}>🎬 Cinema — emessa</span>
                       <span style={{ fontSize:13, fontWeight:800, color:C.green, fontFamily:"Georgia,serif" }}>{co2.toFixed(1)} kg</span>
                     </div>
                     <div style={{ height:22, borderRadius:6, background:C.border, overflow:"hidden" }}>
@@ -2188,6 +2190,17 @@ ${ _exportProfs.length > 0 ? `
                     <div style={{ background:C.bg, borderRadius:8, padding:"9px 11px", textAlign:"center" }}>
                       <div style={{ fontSize:14, fontWeight:800, color:C.purple }}>{gpm.toFixed(2)}</div>
                       <div style={{ fontSize:9, color:C.sub, textTransform:"uppercase", marginTop:2 }}>gCO₂ / 1K adm.</div>
+                    </div>
+                  </div>
+                  {/* CO2 risparmio vs digital highlight */}
+                  <div style={{ marginTop:10, background:`linear-gradient(135deg,${C.green}12,${C.teal}08)`, border:`1px solid ${C.green}33`, borderRadius:10, padding:"10px 14px", display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+                    <div>
+                      <div style={{ fontSize:9, color:C.green, fontWeight:800, textTransform:"uppercase", letterSpacing:1 }}>🌍 CO₂ risparmiata scegliendo il cinema</div>
+                      <div style={{ fontSize:9, color:C.sub, marginTop:2 }}>vs Digital a parità di attenzione generata</div>
+                    </div>
+                    <div style={{ textAlign:"right" }}>
+                      <div style={{ fontSize:20, fontWeight:800, color:C.green, fontFamily:"Georgia,serif" }}>{(dig - co2).toFixed(1)} kg</div>
+                      <div style={{ fontSize:9, color:C.sub }}>= {((dig-co2)/TREE).toFixed(1)} alberi/anno</div>
                     </div>
                   </div>
                 </div>
@@ -2248,6 +2261,7 @@ ${ _exportProfs.length > 0 ? `
           const gpsR  = attSecR>0?(co2r*1000)/attSecR:0;
           const spgR  = co2r>0?attSecR/(co2r*1000):0;
           const ratioR= co2r>0?digR/co2r:0;
+          const savedVsDigR = digR - co2r;
           const rows  = [
             ["Campaign Type",         campaign.type==="circuit"?"Circuit-Wide":"Film-Specific (80+)", false],
             ["Attendances",           fmtFull(realAdm),  false],
@@ -2256,7 +2270,9 @@ ${ _exportProfs.length > 0 ? `
             ["Ad Hours",              adHR.toFixed(1),                false],
             ["Total Energy (kWh)",    kwhTR.toFixed(1),               false],
             ["Grid Factor (kg/kWh)",  GRID.toFixed(3),                false],
-            ["Total CO2 (kg)",        co2r.toFixed(1),                true ],
+            ["CO2 emessa Cinema (kg)",co2r.toFixed(1),                true ],
+            ["CO2 equiv. Digital (kg)",digR.toFixed(1),               false],
+            ["CO2 risparmiata vs Dig.",savedVsDigR.toFixed(1)+" kg",  true ],
             ["mgCO2 per Impression",  gpiR.toFixed(4),                true ],
             ["gCO2 per 1,000 Impr.",  gpmR.toFixed(2),               true ],
             ["gCO2 per Att. Second",  gpsR.toFixed(6),               true ],
@@ -2614,21 +2630,21 @@ ${ _exportProfs.length > 0 ? `
 }
 function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, onSelect, onNew, onEdit, onBack }) {
   // Memoize heavy computation — only recalculates when campaigns/circuitData change
-  const { campResults, totalI, totalSpots, totalCO2 } = useMemo(() => {
-    let totalI = 0, totalSpots = 0, totalCO2 = 0;
+  const { campResults, totalI, totalAdSec, totalCO2 } = useMemo(() => {
+    let totalI = 0, totalAdSec = 0, totalCO2 = 0;
     const campResults = campaigns.map(c => {
       try {
         const r   = computeCampaignAdmissions(c, circuitData, circuitDef);
         const adm = (typeof r.presenze === "number" ? r.presenze : 0) || (Number(c.impressions) || 0);
         const eff = (Number(c.spots) || 0) > 0 ? Number(c.spots) : (typeof r.spettacoli === "number" ? r.spettacoli : 0);
         const co2 = Number(c.co2Saved) || calcCO2(c.tipo || c.type, eff, Number(c.spotSec) || 30);
-        totalI     += adm;
-        totalSpots += eff;
-        totalCO2   += (isFinite(co2) ? co2 : 0);
+        totalI       += adm;
+        totalAdSec   += eff * (Number(c.spotSec) || 30);
+        totalCO2     += (isFinite(co2) ? co2 : 0);
         return { adm, eff, co2 };
       } catch(e) { return { adm:0, eff:0, co2:0 }; }
     });
-    return { campResults, totalI, totalSpots, totalCO2 };
+    return { campResults, totalI, totalAdSec, totalCO2 };
   }, [campaigns, circuitData, circuitDef]);
   const active = campaigns.filter(c=>c.status==="active").length;
   return (
@@ -2649,8 +2665,8 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
           <KpiCard icon="📋" label="Campagne"       value={campaigns.length}   accent={client.color} />
           <KpiCard icon="✅" label="Attive"          value={active}             accent={C.green} />
           <KpiCard icon="🎟️" label="Admissions tot." value={fmt(totalI)}        accent={C.gold} sub="Da dati importati" />
-          <KpiCard icon="📽️" label="Spot totali"     value={fmtFull(totalSpots)} accent={C.purple} sub="Da dati importati" />
-          <KpiCard icon="🌿" label="CO₂ risparmiata" value={fmtFull(Math.round(totalCO2))+" kg"} accent={C.green} />
+          <KpiCard icon="⏱" label="Sec./spettatore" value={totalI > 0 ? Math.round(totalAdSec/totalI)+"\"" : "—"} accent={C.purple} sub="Secondi medi per spettatore" />
+          <KpiCard icon="🌫️" label="CO₂ emessa"      value={fmtFull(Math.round(totalCO2))+" kg"} accent={C.muted} sub="Cinema (tutte le camp.)" />
         </div>
         {campaigns.length===0
           ? <div style={{ textAlign:"center", padding:"60px 0", color:C.muted }}><div style={{ fontSize:40, marginBottom:12 }}>🎬</div><p>Nessuna campagna ancora</p></div>
@@ -2699,18 +2715,18 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
   const allPeriods = [...new Set(allCampsFlat.map(c=>c.period))].sort().reverse();
   const periodCamps = allCampsFlat.filter(c=>filterPeriod==="all"||c.period===filterPeriod);
   // Memoize all recap stats to avoid heavy recomputation on every render
-  const { recapAdm, recapSpots, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed } = useMemo(() => {
-    let recapAdm=0, recapSpots=0, recapBudget=0, recapUnder=0, recapActive=0, recapPlanned=0, recapClosed=0;
+  const { recapAdm, recapAdSec, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed } = useMemo(() => {
+    let recapAdm=0, recapAdSec=0, recapBudget=0, recapUnder=0, recapActive=0, recapPlanned=0, recapClosed=0;
     periodCamps.forEach(c => {
       try { const r=computeCampaignAdmissions(c,circuitData,circuitDef); recapAdm+=(r.presenze||Number(c.impressions)||0); } catch { recapAdm+=Number(c.impressions)||0; }
-      recapSpots  += (c.spots||0);
+      recapAdSec  += (c.spots||0) * (Number(c.spotSec)||30);
       recapBudget += (c.budget||0);
       if (c.admissionTarget>0&&c.impressions<c.admissionTarget) recapUnder++;
       if (c.status==="active")  recapActive++;
       if (c.status==="planned") recapPlanned++;
       if (c.status==="closed")  recapClosed++;
     });
-    return { recapAdm, recapSpots, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed };
+    return { recapAdm, recapAdSec, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed };
   }, [periodCamps, circuitData, circuitDef]);
   const cdPeriod    = filterPeriod!=="all" ? circuitData?.[filterPeriod] : null;
   const updatedAt   = cdPeriod?.updatedAt || null;
@@ -2763,7 +2779,7 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
           <KpiCard icon="🏢"  label="Clienti"            value={clients.length}      accent={C.gold} />
           <KpiCard icon="📋"  label={filterPeriod==="all"?"Camp. totali":"Camp. periodo"} value={periodCamps.length} accent={C.teal} />
           <KpiCard icon="🎟️"  label="Admissions erogate"  value={fmt(recapAdm)}      accent={C.blue} sub={filterPeriod==="all"?"Tutte":"Solo "+filterPeriod} />
-          <KpiCard icon="📽️"  label="Spot totali"         value={fmtFull(recapSpots)} accent={C.purple} />
+          <KpiCard icon="⏱"  label="Sec./spettatore"     value={recapAdm > 0 ? Math.round(recapAdSec/recapAdm)+"\"" : "—"} accent={C.purple} sub="Secondi medi per spettatore" />
           <KpiCard icon="💶"  label="Fatturato"           value={fmtEur(recapBudget)} accent={C.green} />
           <KpiCard icon="⚠️"  label="Underdelivery"       value={recapUnder}          accent={recapUnder>0?C.red:C.green} sub={recapUnder>0?`${recapUnder} sotto target`:"Tutto in linea"} />
         </div>
@@ -2934,7 +2950,7 @@ function AgenzieScreen({ clients, campaigns, circuitData, onSelectCampaign }) {
             <KpiCard icon="🏢" label="Clienti"          value={[...new Set(camps.map(c=>c.clientId))].length} accent={C.purple} />
             <KpiCard icon="🎟️" label="Admissions tot."  value={fmt(totalI)}           accent={C.gold} />
             <KpiCard icon="💶" label="Fatturato"        value={fmtEur(totalB)}        accent={C.teal} />
-            <KpiCard icon="🌿" label="CO₂ risparm."     value={fmtFull(totalCO2)+" kg"} accent={C.green} />
+            <KpiCard icon="🌫️" label="CO₂ emessa"       value={fmtFull(totalCO2)+" kg"} accent={C.muted} sub="Cinema" />
           </div>
           <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             {camps.map(c => {
