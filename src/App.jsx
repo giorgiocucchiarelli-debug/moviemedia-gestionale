@@ -1592,6 +1592,17 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
 }
 
 // ─── CAMPAIGN DASHBOARD ───────────────────────────────────────────────────────
+// Profilo Spettatore bar component — defined at module level to avoid React component identity issues
+const ProfileBar = ({ label, pct, color }) => (
+  <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+    <div style={{ width:90, fontSize:10, color:C.sub, textAlign:"right", flexShrink:0 }}>{label}</div>
+    <div style={{ flex:1, background:C.border, borderRadius:4, height:14, overflow:"hidden" }}>
+      <div style={{ width:`${typeof pct === "number" ? pct : 0}%`, background:color||C.gold, height:"100%", borderRadius:4, transition:"width 0.5s" }} />
+    </div>
+    <div style={{ width:36, fontSize:10, fontWeight:700, color:C.text }}>{typeof pct === "number" ? pct.toFixed(1) : "—"}%</div>
+  </div>
+);
+
 function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, profileData, onBack, isViewer }) {
   // Find best period: match campaign dates to available imported periods
   const findBestPeriod = () => {
@@ -2309,7 +2320,7 @@ ${ _bestProf ? `
           {(() => {
             if (!profileData || Object.keys(profileData).length === 0) return null;
             // Find the profile whose week overlaps the campaign period
-            const profiles = Object.values(profileData).sort((a,b)=>b.key.localeCompare(a.key));
+            const profiles = Object.values(profileData).filter(p => p && typeof p.key === "string").sort((a,b)=>b.key.localeCompare(a.key));
             // Try to match by campaign dates: key format profile-YYYY-WNN
             const campFrom = campaign.dateFrom ? new Date(campaign.dateFrom) : null;
             const campTo   = campaign.dateTo   ? new Date(campaign.dateTo)   : null;
@@ -2332,15 +2343,7 @@ ${ _bestProf ? `
             }
             const prof = bestProfile?.profile;
             if (!prof) return null;
-            const Bar = ({ label, pct, color }) => (
-              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
-                <div style={{ width:90, fontSize:10, color:C.sub, textAlign:"right", flexShrink:0 }}>{label}</div>
-                <div style={{ flex:1, background:C.border, borderRadius:4, height:14, overflow:"hidden" }}>
-                  <div style={{ width:`${pct}%`, background:color||C.gold, height:"100%", borderRadius:4, transition:"width 0.5s" }} />
-                </div>
-                <div style={{ width:36, fontSize:10, fontWeight:700, color:C.text }}>{pct?.toFixed(1)}%</div>
-              </div>
-            );
+            // Bar component defined at module level as ProfileBar
             return (
               <div style={{ ...s.card, padding:"22px 22px 20px", marginBottom:20, background:`${C.purple}06`, border:`1px solid ${C.purple}22` }}>
                 <SectionTitle accent={C.purple}>👥 Profilo Spettatore</SectionTitle>
@@ -2349,31 +2352,31 @@ ${ _bestProf ? `
                   {/* SESSO */}
                   <div>
                     <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Sesso</div>
-                    <Bar label="Donna" pct={prof.female?.pct} color="#E879F9" />
-                    <Bar label="Uomo"  pct={prof.male?.pct}   color="#60A5FA" />
+                    <ProfileBar label="Donna" pct={prof.female?.pct} color="#E879F9" />
+                    <ProfileBar label="Uomo"  pct={prof.male?.pct}   color="#60A5FA" />
                   </div>
                   {/* ETÀ */}
                   <div>
                     <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Fascia d'età</div>
-                    <Bar label="3-10"     pct={prof.age_3_10?.pct}   color={C.gold} />
-                    <Bar label="11-14"    pct={prof.age_11_14?.pct}  color={C.gold} />
-                    <Bar label="15-24"    pct={prof.age_15_24?.pct}  color={C.gold} />
-                    <Bar label="25-34"    pct={prof.age_25_34?.pct}  color={C.gold} />
-                    <Bar label="35-49"    pct={prof.age_35_49?.pct}  color={C.gold} />
-                    <Bar label="50-59"    pct={prof.age_50_59?.pct}  color={C.gold} />
-                    <Bar label="60-69"    pct={prof.age_60_69?.pct}  color={C.gold} />
-                    <Bar label="70+"      pct={prof.age_70plus?.pct} color={C.gold} />
+                    <ProfileBar label="3-10"     pct={prof.age_3_10?.pct}   color={C.gold} />
+                    <ProfileBar label="11-14"    pct={prof.age_11_14?.pct}  color={C.gold} />
+                    <ProfileBar label="15-24"    pct={prof.age_15_24?.pct}  color={C.gold} />
+                    <ProfileBar label="25-34"    pct={prof.age_25_34?.pct}  color={C.gold} />
+                    <ProfileBar label="35-49"    pct={prof.age_35_49?.pct}  color={C.gold} />
+                    <ProfileBar label="50-59"    pct={prof.age_50_59?.pct}  color={C.gold} />
+                    <ProfileBar label="60-69"    pct={prof.age_60_69?.pct}  color={C.gold} />
+                    <ProfileBar label="70+"      pct={prof.age_70plus?.pct} color={C.gold} />
                   </div>
                   {/* CENSO */}
                   <div>
                     <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Status socio-econ.</div>
-                    <Bar label="Alto"       pct={prof.census_high?.pct}        color={C.green} />
-                    <Bar label="Medio-alto" pct={prof.census_medium_high?.pct} color={C.green} />
-                    <Bar label="Medio-basso"pct={prof.census_low?.pct}         color={C.muted} />
+                    <ProfileBar label="Alto"       pct={prof.census_high?.pct}        color={C.green} />
+                    <ProfileBar label="Medio-alto" pct={prof.census_medium_high?.pct} color={C.green} />
+                    <ProfileBar label="Medio-basso"pct={prof.census_low?.pct}         color={C.muted} />
                     <div style={{ fontSize:10, fontWeight:800, color:C.text, textTransform:"uppercase", letterSpacing:1, margin:"14px 0 10px" }}>Frequenza</div>
-                    <Bar label="Frequente"  pct={prof.freq_frequent?.pct} color={C.blue} />
-                    <Bar label="Regular"    pct={prof.freq_regular?.pct}  color={C.blue} />
-                    <Bar label="Casual"     pct={prof.freq_casual?.pct}   color={C.muted} />
+                    <ProfileBar label="Frequente"  pct={prof.freq_frequent?.pct} color={C.blue} />
+                    <ProfileBar label="Regular"    pct={prof.freq_regular?.pct}  color={C.blue} />
+                    <ProfileBar label="Casual"     pct={prof.freq_casual?.pct}   color={C.muted} />
                   </div>
                 </div>
               </div>
@@ -2465,7 +2468,7 @@ ${ _bestProf ? `
               <img src={LOGO_B64} alt="Moviemedia" style={{ height:52, objectFit:"contain" }} />
               <div style={{ textAlign:"right" }}>
                 <div style={{ fontSize:18, fontWeight:800, color:"#0F172A", fontFamily:"Georgia,serif" }}>{campaign.name}</div>
-                <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>{clientName} · {periodsUsed.length>0 ? periodsUsed.join(", ") : cd.label} · {campaign.dateFrom} → {campaign.dateTo}</div>
+                <div style={{ fontSize:11, color:"#64748B", marginTop:4 }}>{clientName} · {periodsUsed.length>0 ? periodsUsed.join(", ") : (cd?.label||campaign.period||"")} · {campaign.dateFrom} → {campaign.dateTo}</div>
               </div>
             </div>
 
@@ -2488,7 +2491,7 @@ ${ _bestProf ? `
             <div style={{ border:"1px solid #BBF7D0", borderRadius:8, overflow:"hidden", marginBottom:16 }}>
               <div style={{ background:"#F0FDF4", padding:"10px 14px", borderBottom:"1px solid #BBF7D0", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
                 <span style={{ fontWeight:700, fontSize:13, color:"#15803D" }}>📋 Cinema CO₂ Report Card</span>
-                <span style={{ fontSize:10, color:"#64748B" }}>{cd.label}</span>
+                <span style={{ fontSize:10, color:"#64748B" }}>{cd?.label||""}</span>
               </div>
               <table style={{ width:"100%", borderCollapse:"collapse" }} dangerouslySetInnerHTML={{ __html: rowsHtml }} />
             </div>
@@ -2600,13 +2603,20 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
   const allCampsFlat = Object.entries(campaigns).filter(([id]) => clientIds.has(id)).flatMap(([,cc]) => cc);
   const allPeriods = [...new Set(allCampsFlat.map(c=>c.period))].sort().reverse();
   const periodCamps = allCampsFlat.filter(c=>filterPeriod==="all"||c.period===filterPeriod);
-  const recapAdm    = periodCamps.reduce((a,c)=>{ const r=computeCampaignAdmissions(c,circuitData,circuitDef); return a+(r.presenze||c.impressions||0); },0);
-  const recapSpots  = periodCamps.reduce((a,c)=>a+(c.spots||0),0);
-  const recapBudget = periodCamps.reduce((a,c)=>a+(c.budget||0),0);
-  const recapUnder  = periodCamps.filter(c=>c.admissionTarget>0&&c.impressions<c.admissionTarget).length;
-  const recapActive = periodCamps.filter(c=>c.status==="active").length;
-  const recapPlanned= periodCamps.filter(c=>c.status==="planned").length;
-  const recapClosed = periodCamps.filter(c=>c.status==="closed").length;
+  // Memoize all recap stats to avoid heavy recomputation on every render
+  const { recapAdm, recapSpots, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed } = useMemo(() => {
+    let recapAdm=0, recapSpots=0, recapBudget=0, recapUnder=0, recapActive=0, recapPlanned=0, recapClosed=0;
+    periodCamps.forEach(c => {
+      try { const r=computeCampaignAdmissions(c,circuitData,circuitDef); recapAdm+=(r.presenze||Number(c.impressions)||0); } catch { recapAdm+=Number(c.impressions)||0; }
+      recapSpots  += (c.spots||0);
+      recapBudget += (c.budget||0);
+      if (c.admissionTarget>0&&c.impressions<c.admissionTarget) recapUnder++;
+      if (c.status==="active")  recapActive++;
+      if (c.status==="planned") recapPlanned++;
+      if (c.status==="closed")  recapClosed++;
+    });
+    return { recapAdm, recapSpots, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed };
+  }, [periodCamps, circuitData, circuitDef]);
   const cdPeriod    = filterPeriod!=="all" ? circuitData?.[filterPeriod] : null;
   const updatedAt   = cdPeriod?.updatedAt || null;
   const filtered = clients.filter(cl=>cl.name.toLowerCase().includes(search.toLowerCase())||cl.sector?.toLowerCase().includes(search.toLowerCase()));
