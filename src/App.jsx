@@ -484,10 +484,20 @@ function isInCircuit(cinemaName, prov, circuitDef) {
 
 // For each circuit cinema, find its BEST match in byCinema (circuit-first, no double counting)
 // Returns: { circName||circProv -> { ...byCinema entry, score } }
+// Module-level cache: byCinema object reference → Map(circuitKey → result)
+const _matchCache = new WeakMap();
+
 function matchCircuitToByCinema(byCinema, circuitDef) {
-  if (!circuitDef?.cinemas?.length) return {}; // no circuit def = no data, not all Italy
-  const result = {};       // circKey -> matched byCinema entry
-  const claimed = {};      // byCinema key -> { circKey, score }
+  if (!circuitDef?.cinemas?.length) return {};
+
+  // Cache key: number of cinemas + a revision counter stored on the def object
+  const ck = circuitDef.cinemas.length + "|" + (circuitDef._rev || 0);
+  let byMap = _matchCache.get(byCinema);
+  if (!byMap) { byMap = new Map(); _matchCache.set(byCinema, byMap); }
+  if (byMap.has(ck)) return byMap.get(ck);
+
+  const result = {};
+  const claimed = {};
 
   for (const circ of circuitDef.cinemas) {
     const circKey = circ.name + "||" + circ.prov;
@@ -497,22 +507,29 @@ function matchCircuitToByCinema(byCinema, circuitDef) {
       if (score > bestScore) { bestScore = score; bestKey = bk; }
     }
     if (bestKey && bestScore > 0) {
-      // Check if already claimed by another circuit cinema with better score
       if (!claimed[bestKey] || claimed[bestKey].score < bestScore) {
-        // Unclaim previous if needed
         if (claimed[bestKey]) delete result[claimed[bestKey].circKey];
         claimed[bestKey] = { circKey, score: bestScore };
         result[circKey] = { ...byCinema[bestKey], score: bestScore };
       }
     }
   }
+  byMap.set(ck, result);
   return result;
 }
 
 
+const _circuitStatsCache = new WeakMap();
+
 // Compute stats from raw period data filtered to circuit (circuit-first, no double-counting)
 function computeCircuitStats(periodData, circuitDef) {
   if (!periodData?.byCinema) return periodData;
+
+  const ck = circuitDef?.cinemas?.length + "|" + (circuitDef?._rev || 0);
+  let pdCache = _circuitStatsCache.get(periodData);
+  if (!pdCache) { pdCache = new Map(); _circuitStatsCache.set(periodData, pdCache); }
+  if (pdCache.has(ck)) return pdCache.get(ck);
+
   // Circuit-first: each circuit cinema claims its best Jan match — no double counting
   const matched = matchCircuitToByCinema(periodData.byCinema, circuitDef);
   const filtered = Object.values(matched);
@@ -546,12 +563,14 @@ function computeCircuitStats(periodData, circuitDef) {
   const topCinema = [...filtered].sort((a,b)=>b.presenze-a.presenze).slice(0,20)
     .map(c=>({ cinema:c.name, citta:c.citta, prov:c.prov, presenze:c.presenze, incasso:c.incasso }));
 
-  return {
+  const result = {
     ...periodData,
     totale:{ presenze:totalPres, incasso:Math.round(totalInc*100)/100, cinema:filtered.length, spettacoli:totalSpett },
     topFilm, topCinema, regioni, province,
     _circuitFiltered:true, _circuitSize:filtered.length, _totalItaly:periodData.totale,
   };
+  pdCache.set(ck, result);
+  return result;
 }
 
 
@@ -559,12 +578,25 @@ function computeCircuitStats(periodData, circuitDef) {
 // Calculates real admissions for a campaign from imported period data.
 // Called automatically — no manual entry needed.
 // Works for in-progress campaigns too: sums all imported weeks that overlap.
+const _campAdmCache = new Map();
+
 function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
   const EMPTY = { presenze:0, incasso:0, spettacoli:0, cinema:0, topFilm:[], topCinema:[], regioni:[], province:[], periodsUsed:[], periodsDetail:[], _debug:{} };
   if (!circuitData || !circuitDef) return EMPTY;
   const dateFrom = campaign.dateFrom ? new Date(campaign.dateFrom + "T00:00:00") : null;
   const dateTo   = campaign.dateTo   ? new Date(campaign.dateTo   + "T23:59:59") : null;
   if (!dateFrom || !dateTo) return EMPTY;
+
+  // Cache key: campaign identity + data versions
+  const campKey = [
+    campaign.id || campaign.name,
+    campaign.dateFrom, campaign.dateTo,
+    campaign.tipo || campaign.type,
+    campaign.film || "",
+    Object.keys(circuitData).sort().join(","),
+    circuitDef?.cinemas?.length, circuitDef?._rev || 0,
+  ].join("|");
+  if (_campAdmCache.has(campKey)) return _campAdmCache.get(campKey);
 
   const tipo     = (campaign.tipo || campaign.type || "circuit").toLowerCase();
   const filmName = (campaign.film || "").trim().toUpperCase();
@@ -671,7 +703,7 @@ function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
     return sum + Math.round((pd.totale?.presenze || 0) * ratio);
   }, 0);
 
-  return {
+  const result = {
     presenze:    Math.round(totalPres),
     incasso:     Math.round(totalInc),
     spettacoli:  Math.round(totalSpett),
@@ -688,6 +720,10 @@ function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
       campaignDates: campaign.dateFrom + " → " + campaign.dateTo,
     },
   };
+  // Cache result (previously the cache was dead code because return came first — now fixed)
+  if (_campAdmCache.size > 500) _campAdmCache.clear();
+  _campAdmCache.set(campKey, result);
+  return result;
 }
 
 
@@ -2711,10 +2747,16 @@ function ClientList({ clients, campaigns, circuitData, circuitDef, onSelect, onN
   const [search, setSearch]             = useState("");
   const [filterPeriod, setFilterPeriod] = useState("all");
   const [confirmDelete, setConfirmDelete] = useState(null); // client id pending deletion
-  const clientIds = new Set(clients.map(c => c.id));
-  const allCampsFlat = Object.entries(campaigns).filter(([id]) => clientIds.has(id)).flatMap(([,cc]) => cc);
-  const allPeriods = [...new Set(allCampsFlat.map(c=>c.period))].sort().reverse();
-  const periodCamps = allCampsFlat.filter(c=>filterPeriod==="all"||c.period===filterPeriod);
+  const clientIds = useMemo(() => new Set(clients.map(c => c.id)), [clients]);
+  const allCampsFlat = useMemo(() =>
+    Object.entries(campaigns).filter(([id]) => clientIds.has(id)).flatMap(([,cc]) => cc),
+    [campaigns, clientIds]);
+  const allPeriods = useMemo(() =>
+    [...new Set(allCampsFlat.map(c=>c.period))].sort().reverse(),
+    [allCampsFlat]);
+  const periodCamps = useMemo(() =>
+    allCampsFlat.filter(c=>filterPeriod==="all"||c.period===filterPeriod),
+    [allCampsFlat, filterPeriod]);
   // Memoize all recap stats to avoid heavy recomputation on every render
   const { recapAdm, recapAdSec, recapBudget, recapUnder, recapActive, recapPlanned, recapClosed } = useMemo(() => {
     let recapAdm=0, recapAdSec=0, recapBudget=0, recapUnder=0, recapActive=0, recapPlanned=0, recapClosed=0;
