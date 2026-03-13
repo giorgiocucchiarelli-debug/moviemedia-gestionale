@@ -1411,7 +1411,8 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
     "UDINE","VARESE","VENEZIA","VERBANO-CUSIO-OSSOLA","VERCELLI","VERONA","VIBO VALENTIA","VICENZA","VITERBO"
   ];
 
-  const allFilms = [...new Set(Object.values(circuitData).flatMap(cd => cd.topFilm?.map(f=>f.film)||[]))].sort();
+  const FILM_PLACEHOLDER = ["FILM A","FILM B","FILM C","FILM D","FILM E","FILM F","FILM G","FILM H"];
+  const allFilms = [...FILM_PLACEHOLDER, ...[...new Set(Object.values(circuitData).flatMap(cd => cd.topFilm?.map(f=>f.film)||[]))].sort()];
 
   const [form, setForm] = useState(() => {
     const base = initial || {};
@@ -1524,14 +1525,14 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
               )}
               {/* Searchable dropdown list */}
               <div style={{ maxHeight:180, overflowY:"auto", border:`1px solid ${C.border2}`, borderRadius:8, padding:"4px 0" }}>
-                {allFilms.length === 0 && <div style={{ padding:"10px 14px", fontSize:12, color:C.muted }}>Nessun film disponibile — importa prima i dati di presenze</div>}
                 {allFilms.map(f => {
                   const sel = form.films.includes(f);
+                  const isPlaceholder = FILM_PLACEHOLDER.includes(f);
                   return (
                     <div key={f} onClick={()=>set("films", sel ? form.films.filter(x=>x!==f) : [...form.films, f])}
                       style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 14px", cursor:"pointer", background:sel?`${C.gold}14`:"transparent", borderLeft:sel?`3px solid ${C.gold}`:"3px solid transparent" }}>
                       <span style={{ fontSize:14 }}>{sel?"☑":"☐"}</span>
-                      <span style={{ fontSize:12, color:sel?C.gold:C.text, fontWeight:sel?700:400 }}>{f}</span>
+                      <span style={{ fontSize:12, color:sel?C.gold:isPlaceholder?C.muted:C.text, fontWeight:sel?700:400, fontStyle:isPlaceholder?"italic":"normal" }}>{f}</span>
                     </div>
                   );
                 })}
