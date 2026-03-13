@@ -1543,12 +1543,13 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
               <div style={s.field}>
                 <label style={s.label}>Durata spot (sec)</label>
                 <select style={s.input} value={form.spotSec||30} onChange={e=>set("spotSec",Number(e.target.value))}>
-                  {[10,15,20,25,30,45,60].map(v=><option key={v} value={v}>{v}s</option>)}
+                  {[10,15,20,25,30,45,60,90].map(v=><option key={v} value={v}>{v}s</option>)}
                 </select>
               </div>
               <div style={s.field}>
                 <label style={s.label}>Spot erogati</label>
                 <input type="number" style={s.input} value={form.spots||0} onChange={e=>set("spots",Number(e.target.value))} />
+                <span style={{ fontSize:9, color:C.muted, marginTop:2 }}>Usato per calcolo CO₂ cinema</span>
               </div>
               <div style={s.field}>
                 <label style={s.label}>Presenze (impressions)</label>
@@ -2898,7 +2899,7 @@ function LoginScreen({ onLogin, error }) {
 }
 
 // ─── AGENZIE SCREEN ───────────────────────────────────────────────────────────
-function AgenzieScreen({ clients, campaigns, circuitData, onSelectCampaign }) {
+function AgenzieScreen({ clients, campaigns, circuitData, circuitDef, onSelectCampaign }) {
   const [search, setSearch] = useState("");
   const [selAgenzia, setSelAgenzia] = useState(null);
 
@@ -3147,8 +3148,9 @@ export default function App() {
   const [clients,     setClients]     = useState(DEMO_CLIENTS);
   const [campaigns,   setCampaigns]   = useState(DEMO_CAMPAIGNS);
   const [circuitData, setCircuitData] = useState(BUILTIN_CIRCUIT);
-  const [circuitDef,  setCircuitDef]  = useState(null); // cinema list from geo file
-  const [profileData, setProfileData] = useState({}); // Cinexpert audience profiles by key
+  const [circuitDef,  setCircuitDef]  = useState(null);
+  const [profileData, setProfileData] = useState({});
+  const [isLoading,   setIsLoading]   = useState(true); // true until initial data fetch completes
 
   const [adminTab,    setAdminTab]    = useState("clients");
   const [view,        setView]        = useState("list");
@@ -3164,17 +3166,25 @@ export default function App() {
 
   useEffect(()=>{
     (async()=>{
-      const su = await apiGet("mm_users_v2");   if(su) setUsers(su);
-      const sc = await apiGet("mm_clients_v2"); if(sc) setClients(sc);
-      const sp = await apiGet("mm_camps_v2");   if(sp) setCampaigns(sp);
-      const sd = await apiGet("mm_circuit_v2");
+      const [su, sc, sp, sd, sg, sp2] = await Promise.all([
+        apiGet("mm_users_v2"),
+        apiGet("mm_clients_v2"),
+        apiGet("mm_camps_v2"),
+        apiGet("mm_circuit_v2"),
+        apiGet("mm_circuit_def"),
+        apiGet("mm_profile_v1"),
+      ]);
+      if (su)  setUsers(su);
+      if (sc)  setClients(sc);
+      if (sp)  setCampaigns(sp);
       if (sd) {
         const cleaned = Object.fromEntries(Object.entries(sd).filter(([,v]) => v.source !== "built-in"));
         setCircuitData(cleaned);
         if (Object.keys(cleaned).length !== Object.keys(sd).length) apiSet("mm_circuit_v2", cleaned);
       }
-      const sg = await apiGet("mm_circuit_def"); if(sg) setCircuitDef(sg);
-      const sp2 = await apiGet("mm_profile_v1"); if(sp2) setProfileData(sp2);
+      if (sg)  setCircuitDef(sg);
+      if (sp2) setProfileData(sp2);
+      setIsLoading(false);
     })();
   }, []);
 
@@ -3274,6 +3284,22 @@ export default function App() {
     const nc={...circuitData}; delete nc[key]; setCircuitData(nc); save("mm_circuit_v2",nc);
   };
 
+  if (isLoading) return (
+    <div style={{ minHeight:"100vh", background:C.bg, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:20 }}>
+      <img src={LOGO_B64} alt="Moviemedia" style={{ height:42, objectFit:"contain", opacity:0.85 }} />
+      <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+        {[0,1,2].map(i => (
+          <div key={i} style={{
+            width:8, height:8, borderRadius:"50%", background:C.gold,
+            animation:`mm-bounce 1s ease-in-out ${i*0.18}s infinite alternate`,
+          }} />
+        ))}
+      </div>
+      <div style={{ fontSize:11, color:C.sub, letterSpacing:1.5, textTransform:"uppercase" }}>Caricamento dati…</div>
+      <style>{`@keyframes mm-bounce { from { opacity:0.2; transform:translateY(0); } to { opacity:1; transform:translateY(-6px); } }`}</style>
+    </div>
+  );
+
   if (!currentUser) return <LoginScreen onLogin={handleLogin} error={loginError} />;
 
   const viewerClient = isViewer ? clients.find(c=>c.id===currentUser.clientId) : null;
@@ -3290,7 +3316,7 @@ export default function App() {
             <ImportScreen circuitData={circuitData} onImport={handleImport} onDeletePeriod={handleDeletePeriod} circuitDef={circuitDef} onCircuitDef={handleCircuitDef} profileData={profileData} onImportProfile={handleImportProfile} />
           )}
           {adminTab==="agenzie" && (
-            <AgenzieScreen clients={clients} campaigns={campaigns} circuitData={circuitData}
+            <AgenzieScreen clients={clients} campaigns={campaigns} circuitData={circuitData} circuitDef={circuitDef}
               onSelectCampaign={(clientId, campId) => {
                 const cl = clients.find(c=>c.id===clientId);
                 const camp = (campaigns[clientId]||[]).find(c=>c.id===campId);
