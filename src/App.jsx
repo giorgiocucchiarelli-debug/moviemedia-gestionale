@@ -592,14 +592,14 @@ function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
     campaign.id || campaign.name,
     campaign.dateFrom, campaign.dateTo,
     campaign.tipo || campaign.type,
-    campaign.film || "",
+    campaign.films?.join(",") || campaign.film || "",
     Object.keys(circuitData).sort().join(","),
     circuitDef?.cinemas?.length, circuitDef?._rev || 0,
   ].join("|");
   if (_campAdmCache.has(campKey)) return _campAdmCache.get(campKey);
 
   const tipo     = (campaign.tipo || campaign.type || "circuit").toLowerCase();
-  const filmName = (campaign.film || "").trim().toUpperCase();
+  const filmNames = campaign.films?.length ? campaign.films.map(f=>f.trim().toUpperCase()) : (campaign.film ? [(campaign.film||"").trim().toUpperCase()] : []);
   const regioni  = campaign.regioni  || [];
   const province = campaign.province || [];
 
@@ -660,11 +660,15 @@ function computeCampaignAdmissions(campaign, circuitData, circuitDef) {
     for (const c of cinemas) {
       let contrib;
       if (tipo === "film") {
-        contrib = Math.round((c.films?.[filmName] || 0) * ratio);
+        contrib = filmNames.reduce((sum, fn) => sum + Math.round((c.films?.[fn] || 0) * ratio), 0);
         if (contrib === 0) continue;
-        filmTotals[filmName] = (filmTotals[filmName] || 0) + contrib;
-        totalInc   += c.incasso * (contrib / Math.max(1, c.presenze));
-        totalSpett += Math.round(c.spettacoli * (contrib / Math.max(1, c.presenze)));
+        for (const fn of filmNames) {
+          const fp = Math.round((c.films?.[fn] || 0) * ratio);
+          if (fp > 0) filmTotals[fn] = (filmTotals[fn] || 0) + fp;
+        }
+        const presRatio = contrib / Math.max(1, c.presenze);
+        totalInc   += c.incasso * presRatio;
+        totalSpett += Math.round(c.spettacoli * presRatio);
       } else {
         contrib    = Math.round(c.presenze * ratio);
         totalInc  += c.incasso  * ratio;
@@ -1416,7 +1420,7 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
       agenzia:         base.agenzia    || "",
       tipo:            base.tipo || base.type || "circuit",
       posizione:       base.posizione  || "Break",
-      film:            base.film       || "",
+      films:           base.films?.length ? base.films : (base.film ? [base.film] : []),
       regioni:         base.regioni    || [],
       province:        base.province   || [],
       dateFrom:        base.dateFrom   || new Date().toISOString().slice(0,10),
@@ -1503,14 +1507,35 @@ function CampaignForm({ clientName, circuitData, onSave, onClose, initial }) {
             </div>
           </div>
 
-          {/* Seguifilm */}
+          {/* Seguifilm — multi selezione */}
           {form.tipo==="film" && (
             <div style={s.field}>
-              <label style={s.label}>🎬 Film</label>
-              <select style={s.input} value={form.film} onChange={e=>set("film",e.target.value)}>
-                <option value="">— seleziona film —</option>
-                {allFilms.map(f=><option key={f} value={f}>{f}</option>)}
-              </select>
+              <label style={s.label}>🎬 Film <span style={{ color:C.purple, fontWeight:700 }}>({form.films.length} selezionati)</span></label>
+              {/* Selected tags */}
+              {form.films.length > 0 && (
+                <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:8 }}>
+                  {form.films.map(f => (
+                    <span key={f} style={{ display:"flex", alignItems:"center", gap:5, background:`${C.gold}22`, border:`1px solid ${C.gold}66`, borderRadius:20, padding:"3px 10px", fontSize:11, color:C.gold, fontWeight:700 }}>
+                      {f}
+                      <span onClick={()=>set("films", form.films.filter(x=>x!==f))} style={{ cursor:"pointer", color:C.gold, fontWeight:900, lineHeight:1, marginLeft:2 }}>×</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+              {/* Searchable dropdown list */}
+              <div style={{ maxHeight:180, overflowY:"auto", border:`1px solid ${C.border2}`, borderRadius:8, padding:"4px 0" }}>
+                {allFilms.length === 0 && <div style={{ padding:"10px 14px", fontSize:12, color:C.muted }}>Nessun film disponibile — importa prima i dati di presenze</div>}
+                {allFilms.map(f => {
+                  const sel = form.films.includes(f);
+                  return (
+                    <div key={f} onClick={()=>set("films", sel ? form.films.filter(x=>x!==f) : [...form.films, f])}
+                      style={{ display:"flex", alignItems:"center", gap:10, padding:"6px 14px", cursor:"pointer", background:sel?`${C.gold}14`:"transparent", borderLeft:sel?`3px solid ${C.gold}`:"3px solid transparent" }}>
+                      <span style={{ fontSize:14 }}>{sel?"☑":"☐"}</span>
+                      <span style={{ fontSize:12, color:sel?C.gold:C.text, fontWeight:sel?700:400 }}>{f}</span>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
 
@@ -1703,6 +1728,7 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   const isCircuit = tipo==="circuit" || tipo==="arena";
   const isFilm    = tipo==="film";
   const isAreale  = tipo==="areale";
+  const filmLabel = isFilm ? (campaign.films?.length ? campaign.films.join(", ") : (campaign.film || "")) : "";
 
   // KEY FUNCTION: compute real admissions from ALL imported periods overlapping campaign dates
   const campAdm = useMemo(
@@ -1979,7 +2005,7 @@ function CampaignDashboard({ campaign, clientName, circuitData, circuitDef, prof
   <div class="header-right">
     <h1>${campaign.name}</h1>
     <p>${clientName} &nbsp;·&nbsp; ${periodsUsed.length>0 ? periodsUsed.join(", ") : cd.label} &nbsp;·&nbsp; ${campaign.dateFrom} → ${campaign.dateTo}</p>
-    <p style="margin-top:3px">${isCircuit?"🎭 Intero Circuito":"🎬 "+campaign.film} &nbsp;·&nbsp; 🏢 ${campaign.agenzia||"Moviemedia"}</p>
+    <p style="margin-top:3px">${isCircuit?"🎭 Intero Circuito":"🎬 "+filmLabel} &nbsp;·&nbsp; 🏢 ${campaign.agenzia||"Moviemedia"}</p>
     <span class="badge">${campaign.status}</span>
   </div>
 </div>
@@ -2128,7 +2154,7 @@ ${ _exportProfs.length > 0 ? `
       <div style={{ background:C.surface, borderBottom:`1px solid ${C.border}`, padding:"18px 36px", display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
         <Btn variant="ghost" small onClick={onBack}>← Campagne</Btn>
         <div style={{ flex:1 }}>
-          <div style={{ fontSize:10, color:C.sub, letterSpacing:1.5, textTransform:"uppercase", marginBottom:3 }}>{clientName} · {isCircuit?"🎭 Intero Circuito":isFilm?`🎬 ${campaign.film}`:`📍 Areale`} · {campaign.dateFrom} → {campaign.dateTo}{periodsUsed.length>0?` (dati: ${periodsUsed.join(", ")})`:" (nessun dato importato)"}</div>
+          <div style={{ fontSize:10, color:C.sub, letterSpacing:1.5, textTransform:"uppercase", marginBottom:3 }}>{clientName} · {isCircuit?"🎭 Intero Circuito":isFilm?`🎬 ${filmLabel}`:"📍 Areale"} · {campaign.dateFrom} → {campaign.dateTo}{periodsUsed.length>0?` (dati: ${periodsUsed.join(", ")})`:" (nessun dato importato)"}</div>
           <h1 style={{ margin:0, fontSize:22, fontWeight:800, color:C.bright, letterSpacing:-0.5, fontFamily:"Georgia,serif" }}>{campaign.name}</h1>
           {campaign.agenzia && <div style={{ fontSize:11, color:C.sub, marginTop:3 }}>🏢 {String(campaign.agenzia)}</div>}
         </div>
@@ -2714,7 +2740,7 @@ function CampaignList({ client, campaigns, circuitData, circuitDef, isViewer, on
                 const name    = String(c.name    || "—");
                 const agenzia = c.agenzia ? String(c.agenzia) : null;
                 const period  = String(cd?.label || c.period || "—");
-                const film    = String(c.film    || "");
+                const film    = c.films?.length ? c.films.join(", ") : String(c.film || "");
                 return (
                   <div key={c.id || idx} style={{ ...s.card, padding:"18px 22px", cursor:"pointer", display:"grid", gridTemplateColumns:"auto 1fr auto auto auto", alignItems:"center", gap:18, transition:"all 0.15s" }}
                     onMouseEnter={e=>{e.currentTarget.style.borderColor=C.border2; e.currentTarget.style.background="#1C2430";}}
@@ -3009,7 +3035,7 @@ function AgenzieScreen({ clients, campaigns, circuitData, circuitDef, onSelectCa
                   <div>
                     <div style={{ fontWeight:700, color:C.text, marginBottom:2 }}>{c.name}</div>
                     <div style={{ fontSize:11, color:C.blue, fontWeight:600 }}>{c.clientName}</div>
-                    <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{c.type==="circuit"||c.tipo==="circuit"?"Intero circuito":`Film: ${c.film||""}`} · {cd?.label||c.period||"—"} · {String(c.dateFrom||"")} → {String(c.dateTo||"")}</div>
+                    <div style={{ fontSize:10, color:C.sub, marginTop:1 }}>{c.type==="circuit"||c.tipo==="circuit"?"Intero circuito":`Film: ${c.films?.length ? c.films.join(", ") : (c.film||"")}`} · {cd?.label||c.period||"—"} · {String(c.dateFrom||"")} → {String(c.dateTo||"")}</div>
                   </div>
                   <div style={{ textAlign:"right" }}>
                     <div style={{ fontSize:15, fontWeight:800, color:C.gold }}>{displayAdm > 0 ? fmt(displayAdm) : "—"}</div>
